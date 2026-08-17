@@ -1,0 +1,103 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "Risk scores and finding severity distribution across all deals",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "piechart",
+      "title": "Findings by Severity (All Deals)",
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "P0 — Critical" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P1 — High" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f97316", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P2 — Medium" }, "properties": [{ "id": "color", "value": { "fixedColor": "#eab308", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P3 — Low" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "sum(agent_findings_count{severity='P0'})", "legendFormat": "P0 — Critical", "refId": "A" },
+        { "expr": "sum(agent_findings_count{severity='P1'})", "legendFormat": "P1 — High", "refId": "B" },
+        { "expr": "sum(agent_findings_count{severity='P2'})", "legendFormat": "P2 — Medium", "refId": "C" },
+        { "expr": "sum(agent_findings_count{severity='P3'})", "legendFormat": "P3 — Low", "refId": "D" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "P0 (Critical) Findings Per Domain",
+      "gridPos": { "h": 9, "w": 16, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "lcd"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#ef4444", "mode": "fixed" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "expr": "agent_findings_count{severity='P0'}",
+        "legendFormat": "{{domain}}",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Critical Findings Over Time",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 20 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*P0.*" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }] },
+          { "matcher": { "id": "byRegexp", "options": ".*P1.*" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f97316", "mode": "fixed" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "sum(agent_findings_count{severity='P0'}) by (domain)", "legendFormat": "P0 {{domain}}", "refId": "A" },
+        { "expr": "sum(agent_findings_count{severity='P1'}) by (domain)", "legendFormat": "P1 {{domain}}", "refId": "B" }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["due-diligence", "risk"],
+  "templating": {
+    "list": [{ "name": "DS_PROMETHEUS", "query": "prometheus", "refresh": 1, "type": "datasource" }]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Risk Overview",
+  "uid": "dd-risk-overview",
+  "version": 1
+}

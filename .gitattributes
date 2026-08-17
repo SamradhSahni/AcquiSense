@@ -1,0 +1,17 @@
+# Normalize line endings for cross-platform dev
+* text=auto eol=lf
+
+# Force LF for shell scripts / Dockerfiles
+*.sh text eol=lf
+Dockerfile text eol=lf
+Makefile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Force CRLF for Windows-only files (none here)
+
+# Binary files — don't touch
+*.png binary
+*.jpg binary
+*.ico binary
+*.svg binary

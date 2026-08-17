@@ -1,0 +1,103 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "Per-agent performance: duration, token usage, and findings count",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "bargauge",
+      "title": "Avg Analysis Duration Per Domain (seconds)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "reduceOptions": { "calcs": ["mean"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "continuous-BlYlRd" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "red", "value": 180 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(agent_analysis_duration_seconds_bucket[10m])) by (domain)",
+        "legendFormat": "{{domain}}",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "Total Tokens Per Agent (Last Hour)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": {
+        "reduceOptions": { "calcs": ["sum"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "continuous-GrYlRd" }
+        }
+      },
+      "targets": [{
+        "expr": "increase(agent_tokens_used_total[1h]) by (agent)",
+        "legendFormat": "{{agent}}",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Findings Count by Domain & Severity",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 5 } }
+      },
+      "targets": [{
+        "expr": "agent_findings_count",
+        "legendFormat": "{{domain}} — {{severity}}",
+        "refId": "A"
+      }]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["due-diligence", "agents"],
+  "templating": {
+    "list": [{
+      "current": {},
+      "hide": 0,
+      "includeAll": false,
+      "name": "DS_PROMETHEUS",
+      "query": "prometheus",
+      "refresh": 1,
+      "type": "datasource"
+    }]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Agent Performance",
+  "uid": "dd-agent-performance",
+  "version": 1
+}
