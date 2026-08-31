@@ -8,7 +8,7 @@ WORKDIR /app
 # ── Development stage (Vite dev server with HMR) ──────────────────────────────
 FROM base AS development
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
@@ -16,7 +16,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 # ── Build stage ───────────────────────────────────────────────────────────────
 FROM base AS build
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npm run build
 

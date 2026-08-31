@@ -16,7 +16,7 @@ CMD ["npm", "run", "dev"]
 # ── Production stage ──────────────────────────────────────────────────────────
 FROM base AS production
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 COPY . .
 EXPOSE 4000
 CMD ["node", "src/app.js"]
