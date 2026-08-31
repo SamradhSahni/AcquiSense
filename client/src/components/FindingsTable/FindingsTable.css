@@ -1,0 +1,177 @@
+.findings-table__filters {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+.findings-table__search {
+  flex: 1;
+  min-width: 200px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-bg-border);
+  color: var(--color-text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.findings-table__search:focus { border-color: var(--color-accent); }
+.findings-table__select {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-bg-border);
+  color: var(--color-text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+}
+.findings-table__count {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.findings-table__container {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-bg-border);
+}
+.findings-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.findings-table__table th {
+  background: var(--color-bg-surface);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-bg-border);
+}
+.findings-table__row {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.findings-table__row:hover td { background: var(--color-bg-elevated); }
+.findings-table__row td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-bg-border);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+.findings-table__domain {
+  color: var(--color-text-secondary) !important;
+  font-size: 12px !important;
+}
+.findings-table__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.findings-table__expand-icon {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.findings-table__citations { text-align: center; }
+.findings-table__cite-count {
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+.findings-table__detail td { padding: 0 !important; background: var(--color-bg-primary) !important; }
+.findings-table__detail-content {
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--color-bg-border);
+}
+.findings-table__detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.findings-table__detail-text {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+.findings-table__citation {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+.findings-table__cite-file {
+  font-size: 12px;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+}
+.findings-table__cite-page {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+.findings-table__quote {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  border-left: 2px solid var(--color-accent);
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-3);
+  font-style: italic;
+  width: 100%;
+}
+.findings-table__tags { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.findings-table__tag {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.findings-table__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.findings-table__pagination button {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-bg-border);
+  color: var(--color-text-primary);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.findings-table__pagination button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.findings-table__pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

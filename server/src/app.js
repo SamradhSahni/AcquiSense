@@ -1,170 +1,138 @@
+'use strict';
 /**
- * Due Diligence Agents — Express API Gateway (Phase 1 Skeleton)
- *
- * Phase 1: boots cleanly, connects to MongoDB + Redis, exposes /health.
- * Phase 3: adds full routes (deals, upload, jobs, reports, websocket).
+ * Due Diligence Agents — Node.js API Gateway
+ * Phase 3: Full implementation with MongoDB, Socket.IO, Redis, and Python bridge.
  */
 
-'use strict';
-
-require('express-async-errors');
-require('dotenv').config();
-
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const mongoose = require('mongoose');
-const http = require('http');
-const { Server: SocketServer } = require('socket.io');
-const Redis = require('ioredis');
+const { Server } = require('socket.io');
+const promClient = require('prom-client');
 
-// ── App setup ─────────────────────────────────────────────────────────────────
-
-const app = express();
+// ── Config ────────────────────────────────────────────────────────────────────
+require('dotenv').config();
 const PORT = process.env.PORT || 4000;
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
 
-// Security + logging middleware
-app.use(helmet());
-app.use(morgan('dev'));
-app.use(
-  cors({
-    origin: [
-      process.env.CLIENT_ORIGIN || 'http://localhost:3000',
-      'http://localhost:3000',
-    ],
-    credentials: true,
-  })
-);
+// ── App & HTTP server ─────────────────────────────────────────────────────────
+const app = express();
+const server = http.createServer(app);
+
+// ── Socket.IO ─────────────────────────────────────────────────────────────────
+const io = new Server(server, {
+  cors: { origin: [CLIENT_ORIGIN, 'http://localhost:3000'], credentials: true },
+  transports: ['websocket', 'polling'],
+});
+
+app.set('io', io);  // Make io accessible in route handlers
+
+// ── Prometheus metrics ────────────────────────────────────────────────────────
+const register = new promClient.Registry();
+promClient.collectDefaultMetrics({ register });
+
+const httpRequestDuration = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 5],
+  registers: [register],
+});
+
+const activeConnections = new promClient.Gauge({
+  name: 'ws_active_connections',
+  help: 'Active WebSocket connections',
+  registers: [register],
+});
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: [CLIENT_ORIGIN, 'http://localhost:3000'], credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(morgan('combined'));
 
-// ── MongoDB connection ─────────────────────────────────────────────────────────
-
-const connectMongo = async () => {
-  const uri = process.env.MONGO_URI;
-  if (!uri) {
-    console.warn('⚠️  MONGO_URI not set — skipping MongoDB connection (Phase 1 OK)');
-    return;
-  }
-  try {
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-    });
-    console.log('✅ MongoDB connected');
-  } catch (err) {
-    console.error('❌ MongoDB connection failed:', err.message);
-    // Don't crash — allows Phase 1 smoke test without credentials
-  }
-};
-
-// ── Redis connection ───────────────────────────────────────────────────────────
-
-let redis = null;
-
-const connectRedis = () => {
-  const url = process.env.REDIS_URL;
-  if (!url) {
-    console.warn('⚠️  REDIS_URL not set — skipping Redis connection (Phase 1 OK)');
-    return;
-  }
-  try {
-    redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 3 });
-    redis.on('connect', () => console.log('✅ Redis connected'));
-    redis.on('error', (err) => console.error('⚠️  Redis error:', err.message));
-    redis.connect().catch(() => {}); // Non-fatal in Phase 1
-  } catch (err) {
-    console.error('❌ Redis setup failed:', err.message);
-  }
-};
+// Prometheus request timer
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer({ method: req.method, route: req.path });
+  res.on('finish', () => end({ status: res.statusCode }));
+  next();
+});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+app.use('/api/deals', require('./routes/dealRoutes'));
+app.use('/api/upload', require('./routes/uploadRoutes'));
+app.use('/api/jobs', require('./routes/jobRoutes'));
+app.use('/api/reports', require('./routes/reportRoutes'));
 
-// Health check (required for Docker healthcheck)
-app.get('/health', (req, res) => {
+// ── Health & Metrics endpoints ────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
+  const mongoose = require('mongoose');
+  const { checkHealth } = require('./services/pythonBridge');
+  const pyHealth = await checkHealth();
   res.json({
     status: 'ok',
     service: 'dd-server',
-    version: '1.0.0',
-    timestamp: Date.now(),
+    version: '3.0.0',
     mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    redis: redis?.status === 'ready' ? 'connected' : 'disconnected',
+    python: pyHealth ? 'ok' : 'unreachable',
+    timestamp: new Date().toISOString(),
   });
 });
 
-// API info
-app.get('/api', (req, res) => {
-  res.json({
-    name: 'Due Diligence Agents API Gateway',
-    version: '1.0.0',
-    endpoints: {
-      health: 'GET /health',
-      deals: 'GET|POST /api/deals  [Phase 3]',
-      upload: 'POST /api/upload     [Phase 3]',
-      jobs: 'GET|POST /api/jobs   [Phase 3]',
-      reports: 'GET /api/reports    [Phase 3]',
-    },
-  });
+app.get('/ready', (req, res) => {
+  const mongoose = require('mongoose');
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready' });
 });
 
-// Stub routes — will be replaced with full routers in Phase 3
-app.use('/api/deals', (req, res) => res.json({ stub: true, phase: 3, route: 'deals' }));
-app.use('/api/upload', (req, res) => res.json({ stub: true, phase: 3, route: 'upload' }));
-app.use('/api/jobs', (req, res) => res.json({ stub: true, phase: 3, route: 'jobs' }));
-app.use('/api/reports', (req, res) => res.json({ stub: true, phase: 3, route: 'reports' }));
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found', path: req.path });
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.send(await register.metrics());
 });
 
-// Global error handler
-app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: err.message || 'Internal server error' });
-});
-
-// ── HTTP + WebSocket server ────────────────────────────────────────────────────
-
-const httpServer = http.createServer(app);
-
-const io = new SocketServer(httpServer, {
-  cors: {
-    origin: [process.env.CLIENT_ORIGIN || 'http://localhost:3000', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-  },
-});
-
-// WebSocket events (Phase 3 will relay agent progress here)
+// ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
+  activeConnections.inc();
+  console.log(`🔌 WebSocket client connected: ${socket.id}`);
 
-  socket.on('subscribe_job', (jobId) => {
-    socket.join(`job:${jobId}`);
-    console.log(`  → subscribed to job:${jobId}`);
+  // Client joins a room for a specific job
+  socket.on('subscribe_job', (pythonJobId) => {
+    const room = `job:${pythonJobId}`;
+    socket.join(room);
+    console.log(`📡 ${socket.id} → room ${room}`);
+    socket.emit('subscribed', { room, pythonJobId });
+  });
+
+  socket.on('unsubscribe_job', (pythonJobId) => {
+    socket.leave(`job:${pythonJobId}`);
   });
 
   socket.on('disconnect', () => {
-    console.log(`🔌 Client disconnected: ${socket.id}`);
+    activeConnections.dec();
+    console.log(`❌ WebSocket client disconnected: ${socket.id}`);
   });
 });
 
-// Export for use in Phase 3 services
-app.set('io', io);
-app.set('redis', () => redis);
+// ── Error handler ─────────────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('❌ Unhandled error:', err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
 
-// ── Start server ──────────────────────────────────────────────────────────────
+// ── DB + Start ────────────────────────────────────────────────────────────────
+const { connectDB } = require('./config/db');
 
-const start = async () => {
-  await connectMongo();
-  connectRedis();
-
-  httpServer.listen(PORT, () => {
-    console.log(`\n🚀 DD Server running on http://localhost:${PORT}`);
-    console.log(`📡 WebSocket ready on ws://localhost:${PORT}`);
-    console.log(`📋 API info: http://localhost:${PORT}/api\n`);
+(async () => {
+  await connectDB();
+  server.listen(PORT, () => {
+    console.log(`🚀 DD Server running on port ${PORT}`);
+    console.log(`   WebSocket: ws://localhost:${PORT}`);
+    console.log(`   Health:    http://localhost:${PORT}/health`);
+    console.log(`   Metrics:   http://localhost:${PORT}/metrics`);
   });
-};
+})();
 
-start().catch(console.error);
+module.exports = { app, io };

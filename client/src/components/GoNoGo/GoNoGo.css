@@ -1,0 +1,94 @@
+.gng-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--gng-color, var(--color-bg-border));
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: 0 0 40px var(--gng-glow, transparent);
+  transition: box-shadow 0.5s ease;
+}
+.gng-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+.gng-verdict__circle {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--gng-color) 15%, transparent);
+  border: 2px solid var(--gng-color);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  color: var(--gng-color);
+  flex-shrink: 0;
+  animation: gng-pulse 3s ease-in-out infinite;
+}
+@keyframes gng-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--gng-glow); }
+  50% { box-shadow: 0 0 0 12px transparent; }
+}
+.gng-verdict__label {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gng-color);
+  letter-spacing: 0.04em;
+}
+.gng-verdict__sub {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+.gng-summary { margin-bottom: var(--space-5); }
+.gng-summary__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.gng-summary__text {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+.gng-scores__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+.gng-score-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.gng-score-domain {
+  width: 100px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.gng-score-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.gng-score-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.8s ease;
+}
+.gng-score-val {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  width: 28px;
+  text-align: right;
+}

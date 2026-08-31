@@ -1,0 +1,56 @@
+.heatmap__grid {
+  display: grid;
+  grid-template-columns: 100px repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: var(--space-4);
+}
+.heatmap__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.heatmap__cell--data:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+  z-index: 1;
+  cursor: default;
+}
+.heatmap__cell--empty { background: transparent; }
+.heatmap__cell--header { background: var(--color-bg-surface); }
+.heatmap__cell--domain {
+  justify-content: flex-start;
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-sm);
+}
+.heatmap__sev-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.04em;
+}
+.heatmap__legend {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+}
+.heatmap__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.heatmap__legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
