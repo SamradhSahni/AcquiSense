@@ -1,8 +1,6 @@
 # ── React Client Dockerfile ───────────────────────────────────────────────────
 FROM node:20-alpine AS base
 
-RUN apk add --no-cache curl
-
 WORKDIR /app
 
 # ── Development stage (Vite dev server with HMR) ──────────────────────────────

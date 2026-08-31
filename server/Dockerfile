@@ -1,8 +1,6 @@
 # ── Node.js Server Dockerfile ─────────────────────────────────────────────────
 FROM node:20-alpine AS base
 
-RUN apk add --no-cache curl
-
 WORKDIR /app
 
 # ── Development stage (hot-reload via nodemon) ────────────────────────────────
