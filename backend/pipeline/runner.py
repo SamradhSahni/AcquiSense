@@ -133,7 +133,7 @@ class PipelineRunner:
             chunks = chunk_documents(
                 parsed_docs,
                 chunk_size=self.chunk_size,
-                chunk_overlap=self.chunk_overlap,
+                overlap=self.chunk_overlap,
             )
             logger.info("[Pipeline] Produced %d chunks from %d docs", len(chunks), len(parsed_docs))
 
