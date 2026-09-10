@@ -83,6 +83,7 @@ services:
     env_file: .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.aicredits.in/v1}
       - MONGO_URI=mongodb://${MONGO_ROOT_USER:-ddadmin}:${MONGO_ROOT_PASS:-ddpassword}@mongodb:27017/${MONGO_DB:-diligence}?authSource=admin
       - REDIS_URL=redis://:${REDIS_PASS:-redispassword}@redis:6379/0
       - UPLOAD_DIR=/app/uploads

@@ -60,8 +60,10 @@ class Orchestrator:
     """
 
     def __init__(self, openai_api_key: str, model_profile: str = "standard"):
+        import os
         profile = MODEL_PROFILES.get(model_profile, MODEL_PROFILES["standard"])
-        self.client = AsyncOpenAI(api_key=openai_api_key)
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        self.client = AsyncOpenAI(api_key=openai_api_key, base_url=base_url)
         self.domain_model = profile["domain"]
         self.synthesis_model = profile["synthesis"]
 

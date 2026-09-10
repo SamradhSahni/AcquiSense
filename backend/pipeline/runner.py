@@ -162,7 +162,10 @@ class PipelineRunner:
             synth_model = {"economy": "gpt-4o-mini", "standard": "gpt-4o", "premium": "gpt-4o"}.get(profile, "gpt-4o")
 
             synthesis = SynthesisAgent(
-                client=AsyncOpenAI(api_key=self.openai_api_key),
+                client=AsyncOpenAI(
+                    api_key=self.openai_api_key,
+                    base_url=os.environ.get("OPENAI_BASE_URL") or None,
+                ),
                 model=synth_model,
             )
             cross_refs, go_no_go, executive_summary = await synthesis.synthesize(
