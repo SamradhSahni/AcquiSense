@@ -76,20 +76,33 @@ router.get('/:id/results', async (req, res) => {
   const job = await Job.findById(req.params.id).lean();
   if (!job) return res.status(404).json({ error: 'Job not found' });
 
-  if (job.status !== 'done') {
+  // Return cached report if it exists
+  const cached = await Report.findOne({ pythonJobId: job.pythonJobId }).lean();
+  if (cached) return res.json(cached.fullReport);
+
+  // If not done yet, return 202
+  if (job.status !== 'done' && job.status !== 'analyzing' && job.status !== 'synthesizing') {
     return res.status(202).json({
       message: `Job is still ${job.status}. Try again when done.`,
       status: job.status,
     });
   }
 
-  // Return cached report if it exists
-  const cached = await Report.findOne({ pythonJobId: job.pythonJobId }).lean();
-  if (cached) return res.json(cached.fullReport);
-
-  // Fetch from Python and cache
+  // Try to fetch from Python directly (handles case where Redis missed the done event)
   try {
     const report = await getResults(job.pythonJobId);
+
+    // If Python says it's not done yet, return 202
+    if (!report || report.status === 'running') {
+      return res.status(202).json({ message: 'Still running', status: job.status });
+    }
+
+    // Mark job done in MongoDB
+    await Job.findByIdAndUpdate(job._id, {
+      status: 'done',
+      goNoGo: report.verdict?.go_no_go,
+      totalFindings: report.verdict?.total_findings,
+    });
 
     // Cache in MongoDB
     await Report.create({
@@ -114,7 +127,7 @@ router.get('/:id/results', async (req, res) => {
 
     res.json(report);
   } catch (err) {
-    res.status(502).json({ error: `Failed to fetch results: ${err.message}` });
+    res.status(202).json({ message: 'Job may still be running', error: err.message });
   }
 });
 

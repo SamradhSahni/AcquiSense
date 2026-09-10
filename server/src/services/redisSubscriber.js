@@ -3,38 +3,29 @@
  * Redis subscriber — listens to Python pipeline progress events
  * and relays them to the React frontend via Socket.IO.
  *
- * Python publishes to: dd:progress:{job_id}
- * We subscribe to that channel and emit Socket.IO events to the
- * room `job:{pythonJobId}` that the React client joins.
+ * FIX: Each job gets its OWN Redis subscriber connection so that
+ * unsubscribing one job doesn't kill other jobs' subscriptions.
  */
 const Redis = require('ioredis');
 const { Job } = require('../models');
-
-let subscriber = null;
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379/0';
 
 /**
  * Subscribe to a Python job's progress channel.
- * @param {string} pythonJobId  — the UUID returned by Python /api/analyze
- * @param {string} mongoJobId   — our internal Job._id for DB updates
- * @param {object} io           — Socket.IO server instance
+ * Uses a dedicated Redis connection per job to avoid shared-connection bugs.
  */
 const subscribeToJob = async (pythonJobId, mongoJobId, io) => {
-  if (!subscriber) {
-    subscriber = new Redis(REDIS_URL);
-    subscriber.on('error', (err) => console.error('⚠️  Redis subscriber:', err.message));
-  }
+  // Each job gets its own subscriber connection
+  const sub = new Redis(REDIS_URL);
+  sub.on('error', (err) => console.error(`⚠️  Redis subscriber [${pythonJobId}]:`, err.message));
 
   const channel = `dd:progress:${pythonJobId}`;
 
-  // Use psubscribe to match the channel pattern
-  subscriber.subscribe(channel, (err) => {
-    if (err) console.error(`Failed to subscribe to ${channel}:`, err.message);
-    else console.log(`📡 Subscribed to Redis channel: ${channel}`);
-  });
+  await sub.subscribe(channel);
+  console.log(`📡 Subscribed to Redis channel: ${channel}`);
 
-  subscriber.on('message', async (ch, message) => {
+  sub.on('message', async (ch, message) => {
     if (ch !== channel) return;
 
     let event;
@@ -68,10 +59,12 @@ const subscribeToJob = async (pythonJobId, mongoJobId, io) => {
         await Job.findByIdAndUpdate(mongoJobId, { $set: update });
       }
 
-      // When done or failed, unsubscribe
+      // When done or failed, clean up this dedicated connection
       if (event.status === 'done' || event.status === 'failed') {
-        subscriber.unsubscribe(channel);
-        console.log(`✅ Unsubscribed from ${channel} (job ${event.status})`);
+        sub.unsubscribe(channel).then(() => {
+          sub.quit();
+          console.log(`✅ Unsubscribed from ${channel} (job ${event.status})`);
+        });
       }
     } catch (dbErr) {
       console.error('Redis→MongoDB update error:', dbErr.message);
