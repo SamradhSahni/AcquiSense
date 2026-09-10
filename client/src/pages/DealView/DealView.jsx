@@ -79,7 +79,6 @@ export default function DealView() {
       if (event.type === 'job_status') {
         setJob((prev) => ({ ...prev, status: event.status, goNoGo: event.go_no_go }));
         if (DONE_STATUSES.includes(event.status) && event.status === 'done') {
-          // Fetch full results when done
           fetchResults();
         }
       }
@@ -87,6 +86,44 @@ export default function DealView() {
 
     return unsub;
   }, [pythonJobId]);
+
+  // ── Polling fallback ──────────────────────────────────────────────────────
+  // Polls every 3s while job is running so the UI always catches completion
+  // even if the WebSocket disconnects before the done event arrives.
+  useEffect(() => {
+    if (!mongoJobId) return;
+
+    const poll = async () => {
+      try {
+        const dealData = await getDeal(id);
+        if (dealData?.job) {
+          const j = dealData.job;
+          setJob(j);
+          if (j.agentProgress) {
+            setAgentProgress(Object.fromEntries(Object.entries(j.agentProgress)));
+          }
+          if (j.status === 'done') {
+            fetchResults();
+          }
+        }
+      } catch (_) {}
+    };
+
+    // Only poll while not done
+    const intervalId = setInterval(() => {
+      setJob((current) => {
+        if (!DONE_STATUSES.includes(current?.status)) {
+          poll();
+        }
+        return current;
+      });
+    }, 3000);
+
+    // Also poll immediately on mount to catch already-completed jobs
+    poll();
+
+    return () => clearInterval(intervalId);
+  }, [id, mongoJobId]);
 
   const fetchResults = useCallback(async () => {
     if (!mongoJobId) return;
