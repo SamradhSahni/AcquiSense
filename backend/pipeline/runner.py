@@ -14,6 +14,7 @@ Called as a background asyncio task from the FastAPI route.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -194,6 +195,11 @@ class PipelineRunner:
             )
 
             # ── Step 6: Persist result ───────────────────────────────────────
+            # Sign the report with SHA-256 for tamper detection (Feature 13)
+            canonical = json.dumps(report, sort_keys=True, ensure_ascii=True)
+            report_hash = hashlib.sha256(canonical.encode()).hexdigest()
+            report["report_hash"] = report_hash
+
             await redis.setex(
                 RESULT_KEY.format(job_id=job_id),
                 JOB_TTL_SECONDS,
@@ -203,9 +209,10 @@ class PipelineRunner:
                 JobStatus.DONE,
                 go_no_go=go_no_go.value,
                 total_findings=report["verdict"]["total_findings"],
+                report_hash=report_hash,
             )
             PIPELINE_JOBS_TOTAL.labels(status="done").inc()
-            logger.info("[Pipeline] Completed job=%s verdict=%s", job_id, go_no_go.value)
+            logger.info("[Pipeline] Completed job=%s verdict=%s hash=%s", job_id, go_no_go.value, report_hash[:16])
 
         except Exception as exc:
             logger.exception("[Pipeline] Job %s FAILED: %s", job_id, exc)

@@ -9,7 +9,25 @@ const { Deal, Job } = require('../models');
 // GET /api/deals — list all deals (newest first)
 router.get('/', async (req, res) => {
   const deals = await Deal.find().sort({ createdAt: -1 }).lean();
-  res.json(deals);
+  const updatedDeals = await Promise.all(
+    deals.map(async (deal) => {
+      if (deal.latestJobId && (deal.status === 'queued' || deal.status === 'analyzing')) {
+        const job = await Job.findById(deal.latestJobId).lean();
+        if (job && (job.status === 'done' || job.status === 'failed')) {
+          deal.status = job.status;
+          deal.goNoGo = job.goNoGo;
+          deal.totalFindings = job.totalFindings || 0;
+          await Deal.findByIdAndUpdate(deal._id, {
+            status: job.status,
+            goNoGo: job.goNoGo,
+            totalFindings: job.totalFindings || 0,
+          });
+        }
+      }
+      return deal;
+    })
+  );
+  res.json(updatedDeals);
 });
 
 // GET /api/deals/:id — single deal with latest job info
@@ -20,6 +38,16 @@ router.get('/:id', async (req, res) => {
   let job = null;
   if (deal.latestJobId) {
     job = await Job.findById(deal.latestJobId).lean();
+    if (job && job.status !== deal.status && (job.status === 'done' || job.status === 'failed')) {
+      deal.status = job.status;
+      deal.goNoGo = job.goNoGo;
+      deal.totalFindings = job.totalFindings || 0;
+      await Deal.findByIdAndUpdate(deal._id, {
+        status: job.status,
+        goNoGo: job.goNoGo,
+        totalFindings: job.totalFindings || 0,
+      });
+    }
   }
   res.json({ ...deal, job });
 });

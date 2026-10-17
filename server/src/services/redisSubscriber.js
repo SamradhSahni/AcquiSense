@@ -3,20 +3,23 @@
  * Redis subscriber — listens to Python pipeline progress events
  * and relays them to the React frontend via Socket.IO.
  *
- * FIX: Each job gets its OWN Redis subscriber connection so that
- * unsubscribing one job doesn't kill other jobs' subscriptions.
+ * FIX:
+ * 1. Dedicated connection per job.
+ * 2. ONLY unsubscribe when event.type === 'job_status' && (done | failed).
+ *    Never unsubscribe when an individual agent_progress finishes!
+ * 3. Auto-cache report and update Deal in MongoDB when job completes.
  */
 const Redis = require('ioredis');
-const { Job } = require('../models');
+const { Job, Deal, Report } = require('../models');
+const { getResults } = require('./pythonBridge');
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379/0';
 
 /**
  * Subscribe to a Python job's progress channel.
- * Uses a dedicated Redis connection per job to avoid shared-connection bugs.
+ * Uses a dedicated Redis connection per job.
  */
 const subscribeToJob = async (pythonJobId, mongoJobId, io) => {
-  // Each job gets its own subscriber connection
   const sub = new Redis(REDIS_URL);
   sub.on('error', (err) => console.error(`⚠️  Redis subscriber [${pythonJobId}]:`, err.message));
 
@@ -55,12 +58,76 @@ const subscribeToJob = async (pythonJobId, mongoJobId, io) => {
         if (event.error) update.error = event.error;
       }
 
+      let updatedJob = null;
       if (Object.keys(update).length > 0) {
-        await Job.findByIdAndUpdate(mongoJobId, { $set: update });
+        updatedJob = await Job.findByIdAndUpdate(mongoJobId, { $set: update }, { new: true });
       }
 
-      // When done or failed, clean up this dedicated connection
-      if (event.status === 'done' || event.status === 'failed') {
+      // If job is finished, update Deal and auto-fetch report
+      if (event.type === 'job_status' && event.status === 'done') {
+        try {
+          const report = await getResults(pythonJobId);
+          if (report && report.verdict) {
+            const dealId = updatedJob?.dealId;
+            await Report.findOneAndUpdate(
+              { pythonJobId },
+              {
+                dealId,
+                jobId: mongoJobId,
+                pythonJobId,
+                goNoGo: report.verdict?.go_no_go,
+                executiveSummary: report.verdict?.executive_summary,
+                totalFindings: report.verdict?.total_findings,
+                severityDistribution: report.verdict?.severity_distribution,
+                domainScores: report.domain_scores,
+                fullReport: report,
+              },
+              { upsert: true }
+            );
+            const agentProgress = {};
+            if (report.domains) {
+              Object.entries(report.domains).forEach(([dom, dData]) => {
+                const count = Array.isArray(dData)
+                  ? dData.length
+                  : (dData?.findings?.length ?? dData?.findings_count ?? 0);
+                agentProgress[dom] = {
+                  domain: dom,
+                  status: 'done',
+                  pct: 100,
+                  findingsCount: count,
+                  error: null,
+                };
+              });
+            }
+
+            await Job.findByIdAndUpdate(mongoJobId, {
+              status: 'done',
+              goNoGo: report.verdict?.go_no_go,
+              totalFindings: report.verdict?.total_findings,
+              ...(Object.keys(agentProgress).length > 0 ? { agentProgress } : {}),
+            });
+
+            if (dealId) {
+              await Deal.findByIdAndUpdate(dealId, {
+                status: 'done',
+                goNoGo: report.verdict?.go_no_go,
+                overallRiskScore: Math.max(...Object.values(report.domain_scores || {}), 0),
+                totalFindings: report.verdict?.total_findings,
+              });
+            }
+          }
+        } catch (fetchErr) {
+          console.warn(`Auto-fetch report warning [${pythonJobId}]:`, fetchErr.message);
+        }
+      } else if (event.type === 'job_status' && event.status === 'failed') {
+        if (updatedJob?.dealId) {
+          await Deal.findByIdAndUpdate(updatedJob.dealId, { status: 'failed' });
+        }
+      }
+
+      // CRITICAL FIX: Only unsubscribe when the ENTIRE job finishes or fails,
+      // NOT when an individual agent sends agent_progress with status: 'done'!
+      if (event.type === 'job_status' && (event.status === 'done' || event.status === 'failed')) {
         sub.unsubscribe(channel).then(() => {
           sub.quit();
           console.log(`✅ Unsubscribed from ${channel} (job ${event.status})`);

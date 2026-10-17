@@ -26,6 +26,7 @@ from monitoring.metrics import (
     DOCS_INGESTED,
     INGESTION_ERRORS,
 )
+from monitoring.tracing import setup_tracing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,20 +37,22 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Due Diligence Backend starting — all 13 agents ready")
+    logger.info("🚀 AcquiSense Backend v4.0.0 starting")
     upload_dir = os.getenv("UPLOAD_DIR", "/app/uploads")
     os.makedirs(upload_dir, exist_ok=True)
+    # Initialize OpenTelemetry distributed tracing
+    setup_tracing(app)
     yield
-    logger.info("🛑 Due Diligence Backend shutting down")
+    logger.info("🛑 AcquiSense Backend shutting down")
 
 
 app = FastAPI(
-    title="Due Diligence Agents API",
+    title="AcquiSense Due Diligence API",
     description=(
-        "13 AI agents performing forensic M&A due diligence across 9 domains. "
-        "Powered by OpenAI GPT-4o / GPT-4o-mini."
+        "AI-powered M&A due diligence platform — 13 specialist agents, "
+        "Deal Copilot RAG, hybrid retrieval, HITL review, and 7-gate quality pipeline."
     ),
-    version="2.0.0",
+    version="4.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -74,10 +77,11 @@ app.include_router(router)
 @app.get("/health", tags=["Infrastructure"])
 async def health():
     return {
-        "status": "ok",
-        "service": "dd-backend",
-        "version": "2.0.0",
-        "agents": 13,
+        "status":   "ok",
+        "service":  "acquisense-backend",
+        "version":  "4.0.0",
+        "agents":   13,
+        "features": ["copilot", "hybrid-retrieval", "hitl-review", "document-comparator", "analyst-questions", "7-gate-qc"],
         "timestamp": time.time(),
     }
 

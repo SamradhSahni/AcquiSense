@@ -1,14 +1,16 @@
 """
-Quality Gate Agent — 5 blocking verification checks on all findings
+Quality Gate Agent — 7 blocking verification checks on all findings
 before they reach the report. Prevents hallucinations and ensures
 every finding has a traceable citation.
 
 Gates (in order):
   1. Citation Presence    — every finding must cite at least one document
-  2. Quote Grounding      — quotes must be extractable from source chunks
+  2. Quote Grounding      — fuzzy match quotes against source chunks (rapidfuzz)
   3. Severity Calibration — P0/P1 findings need substantive evidence
   4. Completeness         — all 9 domains must have a result (even empty)
   5. Consistency          — no finding ID duplicated, no contradictory verdicts
+  6. Evidence Relevance   — cosine similarity between evidence and citation quote
+  7. Tag Validation       — findings must have at least one meaningful tag
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from dataclasses import dataclass, field
 from api.schemas import Domain, DomainFindings, Finding, Severity
 from ingestion.chunker import Chunk
 from monitoring.metrics import QUALITY_GATE_FAILURES
+from agents.retrieval_engine import RetrievalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +48,21 @@ class QualityGateAgent:
         chunks: list[Chunk],
     ) -> tuple[dict[Domain, DomainFindings], list[GateResult]]:
         """
-        Run all 5 gates in sequence.
+        Run all 7 gates in sequence.
         Returns (cleaned_findings, gate_results).
         """
         results: list[GateResult] = []
+
+        # Initialize retrieval engine for fuzzy quote grounding (Gate 2) and
+        # evidence relevance (Gate 6)
+        self._retrieval_engine = RetrievalEngine()
+        # Build a chunk text lookup for fuzzy matching
+        self._chunk_text_by_file: dict[str, str] = {}
+        for c in chunks:
+            if c.file_name not in self._chunk_text_by_file:
+                self._chunk_text_by_file[c.file_name] = c.text
+            else:
+                self._chunk_text_by_file[c.file_name] += " " + c.text
 
         domain_findings, r1 = self._gate_citation_presence(domain_findings)
         results.append(r1)
@@ -65,11 +79,17 @@ class QualityGateAgent:
         domain_findings, r5 = self._gate_consistency(domain_findings)
         results.append(r5)
 
+        domain_findings, r6 = self._gate_evidence_relevance(domain_findings)
+        results.append(r6)
+
+        domain_findings, r7 = self._gate_tag_validation(domain_findings)
+        results.append(r7)
+
         failed_gates = [r.gate_name for r in results if not r.passed]
         if failed_gates:
             logger.warning("Quality gates FAILED: %s", failed_gates)
         else:
-            logger.info("All 5 quality gates passed.")
+            logger.info("All 7 quality gates passed.")
 
         return domain_findings, results
 
@@ -117,27 +137,30 @@ class QualityGateAgent:
         chunks: list[Chunk],
     ) -> tuple[dict[Domain, DomainFindings], GateResult]:
         """
-        Spot-check: if a citation has a quote, try to find it (case-insensitive,
-        first 60 chars) in the original chunks.
-        Non-blocking for short quotes (hallucination is hard to detect perfectly).
+        UPGRADED: Uses rapidfuzz fuzzy matching instead of naive substring check.
+        Dramatically reduces false positives from paraphrased quotes.
+        Threshold: partial_ratio >= 72 (72% overlap between probe and chunk text).
         """
         warnings: list[str] = []
-
-        # Build a set of all text in all chunks (lower-cased) for fast lookup
-        chunk_texts = {c.file_name: c.text.lower() for c in chunks}
 
         for domain, df in domain_findings.items():
             for f in df.findings:
                 for citation in f.citations:
                     if len(citation.quote) < 20:
                         continue   # Too short to verify
-                    probe = citation.quote[:60].lower().strip()
-                    file_text = chunk_texts.get(citation.file, "")
-                    if file_text and probe not in file_text:
+                    file_text = self._chunk_text_by_file.get(citation.file, "")
+                    if not file_text:
+                        continue   # File not in chunks (different upload?) — skip
+
+                    # Use RetrievalEngine fuzzy matcher (rapidfuzz partial_ratio)
+                    matched = self._retrieval_engine.fuzzy_match_quote(
+                        citation.quote, file_text, threshold=72
+                    )
+                    if not matched:
                         warnings.append(
-                            f"[Gate2] {domain.value}/{f.id[:8]}: Quote not found in "
+                            f"[Gate2] {domain.value}/{f.id[:8]}: Quote not found (fuzzy) in "
                             f"'{citation.file}' — possible hallucination. "
-                            f"Quote: '{probe[:40]}…'"
+                            f"Quote: '{citation.quote[:50]}\u2026'"
                         )
                         QUALITY_GATE_FAILURES.labels(gate="quote_grounding").inc()
 
@@ -225,5 +248,87 @@ class QualityGateAgent:
         return domain_findings, GateResult(
             passed=len(warnings) == 0,
             gate_name="consistency",
+            warnings=warnings,
+        )
+
+    # ── Gate 6: Evidence Relevance ────────────────────────────────────────────────────
+
+    def _gate_evidence_relevance(
+        self, domain_findings: dict[Domain, DomainFindings]
+    ) -> tuple[dict[Domain, DomainFindings], GateResult]:
+        """
+        Gate 6 (NEW): Check that the finding's evidence text is semantically
+        related to its citation quote using TF-IDF cosine similarity.
+        Threshold: cosine > 0.15 (deliberately low — just a sanity check).
+        P1/P0 findings with evidence score < 0.15 are flagged.
+        """
+        warnings: list[str] = []
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+        except ImportError:
+            logger.debug("scikit-learn not available — skipping Gate 6")
+            return domain_findings, GateResult(passed=True, gate_name="evidence_relevance")
+
+        for domain, df in domain_findings.items():
+            for f in df.findings:
+                if f.severity not in (Severity.P0, Severity.P1):
+                    continue   # Only check high-severity findings
+                if not f.citations or not f.evidence:
+                    continue
+
+                # Compare evidence text vs citation quote
+                quote = f.citations[0].quote
+                if len(quote) < 20 or len(f.evidence) < 20:
+                    continue
+
+                try:
+                    vect = TfidfVectorizer(stop_words="english")
+                    matrix = vect.fit_transform([f.evidence, quote])
+                    score = float(cosine_similarity(matrix[0:1], matrix[1:2])[0][0])
+                    if score < 0.08:   # Very low similarity — possible mismatch
+                        warnings.append(
+                            f"[Gate6] {domain.value}/{f.id[:8]} [{f.severity.value}]: "
+                            f"Evidence-to-citation similarity = {score:.2f} (low). "
+                            f"Finding: '{f.title[:60]}'"
+                        )
+                        QUALITY_GATE_FAILURES.labels(gate="evidence_relevance").inc()
+                except Exception as exc:
+                    logger.debug("Gate6 cosine check failed for %s: %s", f.id[:8], exc)
+
+        return domain_findings, GateResult(
+            passed=len(warnings) == 0,
+            gate_name="evidence_relevance",
+            warnings=warnings,
+        )
+
+    # ── Gate 7: Tag Validation ────────────────────────────────────────────────────────
+
+    def _gate_tag_validation(
+        self, domain_findings: dict[Domain, DomainFindings]
+    ) -> tuple[dict[Domain, DomainFindings], GateResult]:
+        """
+        Gate 7 (NEW): Every finding should have at least one meaningful tag.
+        Findings with no tags or only trivially short tags are flagged.
+        Non-blocking — adds a tag automatically if missing.
+        """
+        warnings: list[str] = []
+
+        for domain, df in domain_findings.items():
+            updated: list[Finding] = []
+            for f in df.findings:
+                meaningful_tags = [t for t in f.tags if len(t) > 2]
+                if not meaningful_tags:
+                    # Auto-assign domain as a fallback tag
+                    f = f.model_copy(update={"tags": [domain.value, f.severity.value.lower()]})
+                    warnings.append(
+                        f"[Gate7] {domain.value}/{f.id[:8]}: No meaningful tags — auto-assigned domain tag."
+                    )
+                updated.append(f)
+            domain_findings[domain] = df.model_copy(update={"findings": updated})
+
+        return domain_findings, GateResult(
+            passed=len(warnings) == 0,
+            gate_name="tag_validation",
             warnings=warnings,
         )

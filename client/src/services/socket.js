@@ -1,15 +1,16 @@
 import { io } from 'socket.io-client';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:4000';
+const WS_URL = import.meta.env.VITE_WS_URL || '';
 
 let socket = null;
 
 export const getSocket = () => {
   if (!socket) {
-    socket = io(WS_URL, {
+    const opts = {
       transports: ['websocket', 'polling'],
       autoConnect: true,
-    });
+    };
+    socket = WS_URL ? io(WS_URL, opts) : io(opts);
 
     socket.on('connect', () => {
       console.log('🔌 WebSocket connected:', socket.id);

@@ -1,19 +1,19 @@
 'use strict';
 /**
  * Job routes — trigger analysis, poll status, fetch results.
- * This is the critical bridge between React and the Python pipeline.
+ * Phase 4: Jobs now go through BullMQ queue for resilience + auto-retry.
  */
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 
-const { Deal, Job, Report } = require('../models');
-const { startAnalysis, getResults } = require('../services/pythonBridge');
-const { subscribeToJob } = require('../services/redisSubscriber');
+const { Deal, Job, Report }   = require('../models');
+const { getResults }          = require('../services/pythonBridge');
+const { subscribeToJob }      = require('../services/redisSubscriber');
+const { enqueueAnalysis, getQueueHealth } = require('../queues/analysisQueue');
 
-// POST /api/jobs — kick off a new analysis
+// POST /api/jobs — kick off a new analysis (via BullMQ queue)
 // Body: { dealId, fileNames: [...], modelProfile? }
 router.post('/', async (req, res) => {
-  // io is attached to req by app.js middleware
   const io = req.app.get('io');
   const { dealId, fileNames, modelProfile } = req.body;
 
@@ -27,40 +27,29 @@ router.post('/', async (req, res) => {
   // Create the job record in Mongo
   const job = await Job.create({ dealId, status: 'queued' });
 
-  // Call Python
-  let pythonResp;
+  // Update deal immediately
+  await Deal.findByIdAndUpdate(dealId, { latestJobId: job._id, status: 'queued' });
+
+  // Enqueue via BullMQ (resilient, auto-retry, survives restarts)
   try {
-    pythonResp = await startAnalysis({
-      dealId: dealId.toString(),
-      filePaths: fileNames,
+    await enqueueAnalysis({
+      mongoJobId:    job._id.toString(),
+      dealId:        dealId.toString(),
+      filePaths:     fileNames,
       targetCompany: deal.targetCompany,
-      acquirer: deal.acquirer,
-      modelProfile: modelProfile || deal.modelProfile || 'standard',
+      acquirer:      deal.acquirer,
+      modelProfile:  modelProfile || deal.modelProfile || 'standard',
     });
   } catch (err) {
     await Job.findByIdAndUpdate(job._id, { status: 'failed', error: err.message });
-    return res.status(502).json({ error: `Python backend error: ${err.message}` });
-  }
-
-  const pythonJobId = pythonResp.job_id;
-
-  // Update job with Python's job_id
-  await Job.findByIdAndUpdate(job._id, { pythonJobId, status: 'queued' });
-
-  // Update deal with latest job
-  await Deal.findByIdAndUpdate(dealId, { latestJobId: job._id, status: 'queued' });
-
-  // Subscribe to Redis progress channel and relay to Socket.IO
-  if (io) {
-    subscribeToJob(pythonJobId, job._id.toString(), io).catch(console.error);
+    return res.status(502).json({ error: `Queue error: ${err.message}` });
   }
 
   res.status(201).json({
-    jobId: job._id,
-    pythonJobId,
+    jobId:     job._id,
     dealId,
-    status: 'queued',
-    message: 'Analysis queued. Connect to Socket.IO room job:' + pythonJobId + ' for live updates.',
+    status:    'queued',
+    message:   'Analysis queued via BullMQ. Connect to Socket.IO for live updates.',
   });
 });
 
@@ -80,12 +69,8 @@ router.get('/:id/results', async (req, res) => {
   const cached = await Report.findOne({ pythonJobId: job.pythonJobId }).lean();
   if (cached) return res.json(cached.fullReport);
 
-  // If not done yet, return 202
-  if (job.status !== 'done' && job.status !== 'analyzing' && job.status !== 'synthesizing') {
-    return res.status(202).json({
-      message: `Job is still ${job.status}. Try again when done.`,
-      status: job.status,
-    });
+  if (job.status === 'failed') {
+    return res.status(400).json({ error: 'Job failed', message: job.error });
   }
 
   // Try to fetch from Python directly (handles case where Redis missed the done event)
@@ -93,29 +78,51 @@ router.get('/:id/results', async (req, res) => {
     const report = await getResults(job.pythonJobId);
 
     // If Python says it's not done yet, return 202
-    if (!report || report.status === 'running') {
+    if (!report || report.status === 'running' || !report.verdict) {
       return res.status(202).json({ message: 'Still running', status: job.status });
     }
 
-    // Mark job done in MongoDB
+    // Build agentProgress updates from report.domains
+    const agentProgress = {};
+    if (report.domains) {
+      Object.entries(report.domains).forEach(([dom, dData]) => {
+        const count = Array.isArray(dData)
+          ? dData.length
+          : (dData?.findings?.length ?? dData?.findings_count ?? 0);
+        agentProgress[dom] = {
+          domain: dom,
+          status: 'done',
+          pct: 100,
+          findingsCount: count,
+          error: null,
+        };
+      });
+    }
+
+    // Mark job done in MongoDB with full agentProgress
     await Job.findByIdAndUpdate(job._id, {
       status: 'done',
       goNoGo: report.verdict?.go_no_go,
       totalFindings: report.verdict?.total_findings,
+      ...(Object.keys(agentProgress).length > 0 ? { agentProgress } : {}),
     });
 
-    // Cache in MongoDB
-    await Report.create({
-      dealId: job.dealId,
-      jobId: job._id,
-      pythonJobId: job.pythonJobId,
-      goNoGo: report.verdict?.go_no_go,
-      executiveSummary: report.verdict?.executive_summary,
-      totalFindings: report.verdict?.total_findings,
-      severityDistribution: report.verdict?.severity_distribution,
-      domainScores: report.domain_scores,
-      fullReport: report,
-    });
+    // Cache in MongoDB idempotently
+    await Report.findOneAndUpdate(
+      { pythonJobId: job.pythonJobId },
+      {
+        dealId: job.dealId,
+        jobId: job._id,
+        pythonJobId: job.pythonJobId,
+        goNoGo: report.verdict?.go_no_go,
+        executiveSummary: report.verdict?.executive_summary,
+        totalFindings: report.verdict?.total_findings,
+        severityDistribution: report.verdict?.severity_distribution,
+        domainScores: report.domain_scores,
+        fullReport: report,
+      },
+      { upsert: true, new: true }
+    );
 
     // Update deal summary
     await Deal.findByIdAndUpdate(job.dealId, {
@@ -135,6 +142,12 @@ router.get('/:id/results', async (req, res) => {
 router.get('/deal/:dealId', async (req, res) => {
   const jobs = await Job.find({ dealId: req.params.dealId }).sort({ createdAt: -1 }).lean();
   res.json(jobs);
+});
+
+// GET /api/jobs/queue/health — BullMQ queue health
+router.get('/queue/health', async (req, res) => {
+  const health = await getQueueHealth();
+  res.json(health);
 });
 
 module.exports = router;

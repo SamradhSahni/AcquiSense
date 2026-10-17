@@ -6,20 +6,30 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
+    watch: {
+      usePolling: true,
+      interval: 1000,
+    },
     // Proxy API calls to Node server (avoids CORS in dev)
     proxy: {
       '/api': {
         target: 'http://server:4000',
         changeOrigin: true,
       },
+      '/health': {
+        target: 'http://server:4000',
+        changeOrigin: true,
+      },
       '/socket.io': {
-        target: 'ws://server:4000',
+        target: 'http://server:4000',
         ws: true,
       },
     },
   },
   define: {
-    'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'http://localhost:4000'),
-    'process.env.VITE_WS_URL': JSON.stringify(process.env.VITE_WS_URL || 'ws://localhost:4000'),
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || ''),
+    'import.meta.env.VITE_WS_URL': JSON.stringify(process.env.VITE_WS_URL || ''),
+    'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || ''),
+    'process.env.VITE_WS_URL': JSON.stringify(process.env.VITE_WS_URL || ''),
   },
 });

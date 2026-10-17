@@ -1,11 +1,42 @@
 import axios from 'axios';
+import { getToken, setToken, removeToken } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
 });
+
+// Request interceptor to add JWT token
+api.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle token expiration
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Token expired or invalid
+      removeToken();
+      // Optionally redirect to login page
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // ── Deals ─────────────────────────────────────────────────────────────────────
 export const getDeals = () => api.get('/api/deals').then((r) => r.data);
@@ -42,5 +73,9 @@ export const getDealReport = (dealId) => api.get(`/api/reports/deal/${dealId}`).
 
 // ── Health ────────────────────────────────────────────────────────────────────
 export const getHealth = () => api.get('/health').then((r) => r.data);
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+export const login = (data) => api.post('/api/auth/login', data).then((r) => r.data);
+export const register = (data) => api.post('/api/auth/register', data).then((r) => r.data);
 
 export default api;

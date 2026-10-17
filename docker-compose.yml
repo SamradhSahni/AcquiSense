@@ -12,6 +12,7 @@
 #    Prometheus: localhost:9190  → container:9090
 #    Grafana:    localhost:3100  → container:3001
 # ─────────────────────────────────────────────────────────────────────────────
+name: company_acquire
 
 networks:
   dd-network:
@@ -114,6 +115,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+      target: development
     container_name: dd_server
     restart: unless-stopped
     env_file: .env
@@ -156,14 +158,15 @@ services:
     container_name: dd_client
     restart: unless-stopped
     environment:
-      - VITE_API_URL=http://localhost:4100
-      - VITE_WS_URL=http://localhost:4100
+      - VITE_API_URL=${VITE_API_URL:-}
+      - VITE_WS_URL=${VITE_WS_URL:-}
     ports:
       - "5173:3000"
     volumes:
       - ./client/src:/app/src
       - ./client/public:/app/public
       - ./client/index.html:/app/index.html
+      - ./client/vite.config.js:/app/vite.config.js
     networks:
       - dd-network
     depends_on:

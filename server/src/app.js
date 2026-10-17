@@ -11,11 +11,20 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const { Server } = require('socket.io');
 const promClient = require('prom-client');
+const { startWorker, createQueueEvents, getQueueHealth } = require('./queues/analysisQueue');
+const { router: authRouter, authenticateToken } = require('./routes/authRoutes');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 require('dotenv').config();
 const PORT = process.env.PORT || 4000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const ALLOWED_ORIGINS = Array.from(new Set([
+  CLIENT_ORIGIN,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+]));
 
 // ── App & HTTP server ─────────────────────────────────────────────────────────
 const app = express();
@@ -23,7 +32,7 @@ const server = http.createServer(app);
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: { origin: [CLIENT_ORIGIN, 'http://localhost:3000'], credentials: true },
+  cors: { origin: ALLOWED_ORIGINS, credentials: true },
   transports: ['websocket', 'polling'],
 });
 
@@ -49,7 +58,7 @@ const activeConnections = new promClient.Gauge({
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: [CLIENT_ORIGIN, 'http://localhost:3000'], credentials: true }));
+app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
@@ -61,23 +70,41 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Authentication middleware ────────────────────────────────────────────────
+// We'll use authenticateToken from authRoutes for routes that require authentication
+// We'll apply it to specific route groups below.
+
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/api/deals', require('./routes/dealRoutes'));
-app.use('/api/upload', require('./routes/uploadRoutes'));
-app.use('/api/jobs', require('./routes/jobRoutes'));
-app.use('/api/reports', require('./routes/reportRoutes'));
+// Python proxy MUST be first — strips /api/python prefix and forwards to FastAPI
+app.use('/api/python', require('./routes/pythonProxyRoutes'));
+
+// Authentication routes (public)
+app.use('/api/auth', authRouter);
+
+// Protected routes - require authentication
+app.use('/api/deals',    authenticateToken, require('./routes/dealRoutes'));
+app.use('/api/upload',   authenticateToken, require('./routes/uploadRoutes'));
+app.use('/api/jobs',     authenticateToken, require('./routes/jobRoutes'));
+app.use('/api/reports',  authenticateToken, require('./routes/reportRoutes'));
+app.use('/api/findings', authenticateToken, require('./routes/findingRoutes'));
+app.use('/api/users',    authenticateToken, require('./routes/userRoutes'));
+app.use('/api/groups',   authenticateToken, require('./routes/groupRoutes'));
 
 // ── Health & Metrics endpoints ────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   const mongoose = require('mongoose');
   const { checkHealth } = require('./services/pythonBridge');
-  const pyHealth = await checkHealth();
+  const [pyHealth, queueHealth] = await Promise.all([
+    checkHealth(),
+    getQueueHealth(),
+  ]);
   res.json({
-    status: 'ok',
-    service: 'dd-server',
-    version: '3.0.0',
-    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    python: pyHealth ? 'ok' : 'unreachable',
+    status:    'ok',
+    service:   'dd-server',
+    version:   '4.0.0',
+    mongo:     mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    python:    pyHealth ? 'ok' : 'unreachable',
+    queue:     queueHealth,
     timestamp: new Date().toISOString(),
   });
 });
@@ -127,11 +154,24 @@ const { connectDB } = require('./config/db');
 
 (async () => {
   await connectDB();
+
+  // Start BullMQ worker (resilient job processing with auto-retry)
+  const worker = startWorker(io);
+  createQueueEvents();
+
   server.listen(PORT, () => {
     console.log(`🚀 DD Server running on port ${PORT}`);
-    console.log(`   WebSocket: ws://localhost:${PORT}`);
-    console.log(`   Health:    http://localhost:${PORT}/health`);
-    console.log(`   Metrics:   http://localhost:${PORT}/metrics`);
+    console.log(`   WebSocket:  ws://localhost:${PORT}`);
+    console.log(`   Health:     http://localhost:${PORT}/health`);
+    console.log(`   Metrics:    http://localhost:${PORT}/metrics`);
+    console.log(`   Queue:      http://localhost:${PORT}/api/jobs/queue/health`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    console.log('🛑 SIGTERM received — shutting down gracefully');
+    await worker.close();
+    server.close(() => process.exit(0));
   });
 })();
 

@@ -102,7 +102,7 @@ export default function Dashboard() {
 
       {/* Filter tabs */}
       <div className="dashboard__filters">
-        {['all', 'analyzing', 'done', 'draft', 'failed'].map((f) => (
+        {['all', 'queued', 'analyzing', 'done', 'draft', 'failed'].map((f) => (
           <button
             key={f}
             className={`dashboard__filter-tab ${filter === f ? 'dashboard__filter-tab--active' : ''}`}

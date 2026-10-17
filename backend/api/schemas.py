@@ -147,3 +147,62 @@ class ResultsResponse(BaseModel):
     go_no_go: GoNoGo | None = None
     executive_summary: str = ""
     domain_scores: dict[str, float] = Field(default_factory=dict)
+    report_hash: str = ""           # SHA-256 fingerprint for tamper detection
+
+
+# ─── Copilot Schemas ──────────────────────────────────────────────────────────
+
+class CopilotMessage(BaseModel):
+    """A single turn in the conversation history."""
+    role: str                      # "user" | "assistant"
+    content: str
+
+
+class CopilotQuery(BaseModel):
+    query: str
+    job_id: str                    # Which analysis result to search
+    conversation_history: list[CopilotMessage] = Field(default_factory=list)
+    # Optional: Node.js injects this when Redis has expired (falls back from MongoDB)
+    report: dict | None = Field(default=None, exclude=True)
+
+
+class CopilotCitation(BaseModel):
+    """A single citation card shown below an AI response."""
+    ref_id: int
+    finding_id: str | None = None
+    domain: str
+    severity: str = "P2"
+    title: str
+    file: str = ""
+    page: int = 0
+    quote: str = ""
+    type: str = "finding"          # "finding" | "cross_ref" | "document"
+    score: float = 0.0             # Retrieval relevance score
+
+
+class CopilotResponse(BaseModel):
+    answer: str
+    citations: list[CopilotCitation] = Field(default_factory=list)
+    domains_searched: list[str] = Field(default_factory=list)
+    confidence: str = "medium"     # "high" | "medium" | "low"
+    follow_up_suggestions: list[str] = Field(default_factory=list)
+    guardrail_warnings: list[str] = Field(default_factory=list)
+
+
+# ─── Analyst Questions Schemas ────────────────────────────────────────────────
+
+class AnalystQuestion(BaseModel):
+    id: str
+    domain: str
+    severity: str
+    linked_finding_ids: list[str] = Field(default_factory=list)
+    question: str
+    rationale: str = ""
+    what_to_look_for: str = ""
+
+
+class AnalystQuestionsResponse(BaseModel):
+    job_id: str
+    questions: list[AnalystQuestion] = Field(default_factory=list)
+    by_domain: dict[str, list[AnalystQuestion]] = Field(default_factory=dict)
+    total: int = 0
