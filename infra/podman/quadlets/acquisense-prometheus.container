@@ -1,0 +1,16 @@
+[Unit]
+Description=AcquiSense Prometheus Metrics Scraper
+PartOf=acquisense.pod
+After=acquisense.pod
+
+[Container]
+ContainerName=acquisense-prometheus
+Pod=acquisense.pod
+Image=docker.io/prom/prometheus:v2.51.0
+Exec=--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=15d
+Volume=acquisense-prometheus-data:/prometheus:z
+Volume=%h/acquisense/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+
+[Install]
+WantedBy=default.target
+

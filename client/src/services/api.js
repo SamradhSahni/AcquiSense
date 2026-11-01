@@ -71,6 +71,32 @@ export const getReports = () => api.get('/api/reports').then((r) => r.data);
 export const getReport = (id) => api.get(`/api/reports/${id}`).then((r) => r.data);
 export const getDealReport = (dealId) => api.get(`/api/reports/deal/${dealId}`).then((r) => r.data);
 
+// ── Findings & Action Center ──────────────────────────────────────────────────
+export const getDealFindings = (dealId, params) =>
+  api.get(`/api/findings/deal/${dealId}`, { params }).then((r) => r.data);
+
+export const getDealFindingsSummary = (dealId) =>
+  api.get(`/api/findings/deal/${dealId}/summary`).then((r) => r.data);
+
+export const syncJobFindings = (jobId) =>
+  api.post(`/api/findings/sync/${jobId}`).then((r) => r.data);
+
+export const actionFinding = (findingId, data) =>
+  api.patch(`/api/findings/${findingId}/action`, data).then((r) => r.data);
+
+export const reviewFinding = (findingId, data) =>
+  api.patch(`/api/findings/${findingId}/review`, data).then((r) => r.data);
+
+// ── Python Endpoints ──────────────────────────────────────────────────────────
+export const getAnalystQuestions = (jobId) =>
+  api.get(`/api/python/results/${jobId}/questions`).then((r) => r.data);
+
+export const compareDocuments = (jobId, data) =>
+  api.post(`/api/python/results/${jobId}/compare`, data).then((r) => r.data);
+
+export const askCopilot = (dealId, data) =>
+  api.post(`/api/python/copilot/${dealId}`, data).then((r) => r.data);
+
 // ── Health ────────────────────────────────────────────────────────────────────
 export const getHealth = () => api.get('/health').then((r) => r.data);
 

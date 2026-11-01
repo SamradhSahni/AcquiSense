@@ -1,58 +1,105 @@
 import React, { useState, useEffect } from 'react';
+import { 
+  MessageSquareQuote, 
+  Compass, 
+  Ear, 
+  Link2, 
+  ChevronDown, 
+  ChevronUp, 
+  RefreshCw, 
+  AlertTriangle, 
+  Sparkles,
+  HelpCircle,
+  FileQuestion
+} from 'lucide-react';
 import './AnalystQuestions.css';
+import { getAnalystQuestions } from '../../services/api';
 
 const DOMAIN_COLORS = {
-  finance:    '#6366f1', legal:      '#8b5cf6',
-  commercial: '#06b6d4', tech:       '#3b82f6',
-  cyber:      '#ef4444', hr:         '#ec4899',
-  tax:        '#f59e0b', regulatory: '#14b8a6', esg: '#22c55e',
+  finance:    'var(--domain-finance, #10B981)',
+  legal:      'var(--domain-legal, #38BDF8)',
+  commercial: 'var(--domain-commercial, #6366F1)',
+  tech:       'var(--domain-tech, #818CF8)',
+  cyber:      'var(--domain-cyber, #F43F5E)',
+  hr:         'var(--domain-hr, #EC4899)',
+  tax:        'var(--domain-tax, #F59E0B)',
+  regulatory: 'var(--domain-regulatory, #14B8A6)',
+  esg:        'var(--domain-esg, #84CC16)',
 };
 
-const SEVERITY_COLORS = { P0: '#ef4444', P1: '#f97316', P2: '#eab308', P3: '#22c55e' };
+const SEVERITY_COLORS = { 
+  P0: 'var(--risk-p0, #F43F5E)', 
+  P1: 'var(--risk-p1, #F97316)', 
+  P2: 'var(--risk-p2, #F59E0B)', 
+  P3: 'var(--risk-p3, #10B981)' 
+};
 
 function QuestionCard({ question, index }) {
   const [expanded, setExpanded] = useState(false);
-  const domainColor = DOMAIN_COLORS[question.domain] || '#6366f1';
-  const sevColor = SEVERITY_COLORS[question.severity] || '#eab308';
+  const domainColor = DOMAIN_COLORS[question.domain] || 'var(--domain-commercial)';
+  const sevColor = SEVERITY_COLORS[question.severity] || 'var(--risk-p2)';
 
   return (
-    <div className="question-card" data-severity={question.severity}>
+    <div className={`question-card glass-panel glass-panel--interactive question-card--${(question.severity || 'p2').toLowerCase()}`}>
       <div className="question-card-header" onClick={() => setExpanded(!expanded)}>
         <div className="question-header-meta">
-          <span className="question-number">Q{String(index + 1).padStart(2, '0')}</span>
-          <span className="question-severity-badge" style={{ background: sevColor }}>
+          <span className="question-number tabular-nums">Q{String(index + 1).padStart(2, '0')}</span>
+          <span className="question-severity-badge tabular-nums" style={{ background: sevColor }}>
             {question.severity}
           </span>
-          <span className="question-domain-badge" style={{ background: domainColor }}>
+          <span 
+            className="question-domain-badge" 
+            style={{ 
+              background: `color-mix(in srgb, ${domainColor} 15%, transparent)`,
+              color: domainColor,
+              borderColor: `color-mix(in srgb, ${domainColor} 30%, transparent)`
+            }}
+          >
             {question.domain}
           </span>
         </div>
         <p className="question-text">{question.question}</p>
-        <button className="question-expand-btn" aria-label="Expand question">
-          {expanded ? '▲ Less' : '▼ More'}
-        </button>
+        <div className="question-expand-wrapper">
+          <button className="question-expand-btn" aria-label="Expand question">
+            <span>{expanded ? 'Hide Rationale' : 'Expose Rationale'}</span>
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        </div>
       </div>
 
       {expanded && (
         <div className="question-card-body">
           {question.rationale && (
-            <div className="question-rationale">
-              <span className="detail-label">📌 Rationale</span>
+            <div className="question-rationale glass-panel">
+              <div className="detail-label">
+                <Compass size={14} />
+                <span>FORENSIC RATIONALE & LIABILITY EXPOSURE</span>
+              </div>
               <p>{question.rationale}</p>
             </div>
           )}
+
           {question.what_to_look_for && (
-            <div className="question-look-for">
-              <span className="detail-label">🔎 What to look for in the answer</span>
+            <div className="question-look-for glass-panel">
+              <div className="detail-label detail-label--signal">
+                <Ear size={14} />
+                <span>TARGET SIGNAL / WHAT TO LISTEN FOR IN MANAGEMENT RESPONSE</span>
+              </div>
               <p>{question.what_to_look_for}</p>
             </div>
           )}
+
           {question.linked_finding_ids && question.linked_finding_ids.length > 0 && (
             <div className="question-findings">
-              <span className="detail-label">🔗 Linked findings</span>
+              <div className="detail-label">
+                <Link2 size={13} />
+                <span>GROUNDED EVIDENCE CITATIONS</span>
+              </div>
               <div className="linked-ids">
                 {question.linked_finding_ids.map(id => (
-                  <code key={id} className="finding-id">{id.slice(0, 8)}…</code>
+                  <code key={id} className="finding-id tabular-nums">
+                    FINDING-{id.slice(0, 8).toUpperCase()}
+                  </code>
                 ))}
               </div>
             </div>
@@ -74,16 +121,14 @@ export default function AnalystQuestions({ jobId }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/python/results/${jobId}/questions`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      const json = await res.json();
+      const json = await getAnalystQuestions(jobId);
       setData(json);
       if (json.by_domain) {
         const firstDomain = Object.keys(json.by_domain)[0];
         if (firstDomain) setActiveDomain(firstDomain);
       }
     } catch (err) {
-      setError(err.message);
+      setError(err?.response?.data?.detail || err?.response?.data?.error || err.message);
     } finally {
       setLoading(false);
     }
@@ -99,73 +144,95 @@ export default function AnalystQuestions({ jobId }) {
 
   return (
     <div className="analyst-questions">
+      {/* Header */}
       <div className="aq-header">
         <div className="aq-header-text">
-          <h2 className="aq-title">📋 Analyst Interview Questions</h2>
+          <div className="aq-header-pill">
+            <MessageSquareQuote size={13} />
+            <span>EXECUTIVE MANAGEMENT INTERROGATION ENGINE</span>
+          </div>
+          <h2 className="aq-title">Analyst Interview Questions</h2>
           <p className="aq-subtitle">
-            AI-generated management interview questions based on deal findings.
-            Each question is linked to specific evidence and includes guidance on what to look for.
+            Autonomous forensic interrogation guide synthesized from deal liabilities. Pinpoints what management may attempt to deflect and provides real-time signal detection.
           </p>
         </div>
+
         {data && (
           <div className="aq-stats">
-            <div className="aq-stat">
-              <span className="aq-stat-value">{data.total}</span>
-              <span className="aq-stat-label">Questions</span>
+            <div className="aq-stat glass-panel">
+              <span className="aq-stat-value tabular-nums">{data.total}</span>
+              <span className="aq-stat-label">Total Queries</span>
             </div>
-            <div className="aq-stat">
-              <span className="aq-stat-value">{domains.length}</span>
-              <span className="aq-stat-label">Domains</span>
+            <div className="aq-stat glass-panel">
+              <span className="aq-stat-value tabular-nums">{domains.length}</span>
+              <span className="aq-stat-label">Active Domains</span>
             </div>
           </div>
         )}
       </div>
 
       {loading && (
-        <div className="aq-loading">
-          <div className="aq-spinner"></div>
-          <p>Generating interview questions from deal findings…<br/>
-            <small>This takes 20–30 seconds on first load.</small>
-          </p>
+        <div className="aq-loading glass-panel">
+          <div className="aq-spinner-wrapper">
+            <RefreshCw size={24} className="spin aq-spinner-icon" />
+          </div>
+          <p className="aq-loading-title">Synthesizing Management Interrogation Vectors…</p>
+          <p className="aq-loading-sub">Distilling findings across 9 domains into forensic question matrices.</p>
         </div>
       )}
 
       {error && (
         <div className="aq-error">
-          <span>⚠️ {error}</span>
-          <button onClick={fetchQuestions} className="aq-retry-btn">Retry</button>
+          <div className="aq-error-left">
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+          <button onClick={fetchQuestions} className="aq-retry-btn">
+            <RefreshCw size={13} />
+            <span>Retry</span>
+          </button>
         </div>
       )}
 
       {!loading && !error && data && (
         <>
-          {/* Domain filter tabs */}
+          {/* Domain Filter Pill Strip */}
           <div className="aq-domain-tabs">
             <button
-              className={`aq-domain-tab ${activeDomain === 'all' ? 'active' : ''}`}
+              className={`aq-domain-tab glass-panel ${activeDomain === 'all' ? 'aq-domain-tab--active' : ''}`}
               onClick={() => setActiveDomain('all')}
             >
-              All ({data.total})
+              <span>All Domains</span>
+              <span className="aq-tab-count tabular-nums">{data.total}</span>
             </button>
-            {domains.map(d => (
-              <button
-                key={d}
-                className={`aq-domain-tab ${activeDomain === d ? 'active' : ''}`}
-                onClick={() => setActiveDomain(d)}
-                style={activeDomain === d ? { borderColor: DOMAIN_COLORS[d], color: DOMAIN_COLORS[d] } : {}}
-              >
-                {d} ({data.by_domain[d]?.length || 0})
-              </button>
-            ))}
+            {domains.map(d => {
+              const count = data.by_domain[d]?.length || 0;
+              const isActive = activeDomain === d;
+              const color = DOMAIN_COLORS[d] || 'var(--domain-commercial)';
+
+              return (
+                <button
+                  key={d}
+                  className={`aq-domain-tab glass-panel ${isActive ? 'aq-domain-tab--active' : ''}`}
+                  onClick={() => setActiveDomain(d)}
+                  style={isActive ? { borderColor: color, color } : {}}
+                >
+                  <span>{d.toUpperCase()}</span>
+                  <span className="aq-tab-count tabular-nums">{count}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Questions list */}
+          {/* Questions List */}
           <div className="aq-questions-list">
             {displayQuestions.length === 0 ? (
-              <div className="aq-empty">No questions available for this domain.</div>
+              <div className="aq-empty glass-panel">
+                No targeted management questions generated for this domain cluster.
+              </div>
             ) : (
               displayQuestions.map((q, i) => (
-                <QuestionCard key={q.id} question={q} index={i} />
+                <QuestionCard key={q.id || i} question={q} index={i} />
               ))
             )}
           </div>
@@ -173,12 +240,15 @@ export default function AnalystQuestions({ jobId }) {
       )}
 
       {!loading && !data && !error && (
-        <div className="aq-empty-state">
-          <div className="aq-empty-icon">💬</div>
-          <h3>Generate Interview Questions</h3>
-          <p>AI will analyze all deal findings and create specific questions for management.</p>
+        <div className="aq-empty-state glass-panel">
+          <div className="aq-empty-icon-well">
+            <FileQuestion size={36} />
+          </div>
+          <h3>Generate Interrogation Matrix</h3>
+          <p>Deploy AI to cross-reference identified deal liabilities with management interview techniques and signal detection rubrics.</p>
           <button className="aq-generate-btn" onClick={fetchQuestions}>
-            Generate Questions
+            <Sparkles size={16} />
+            <span>Generate Interview Matrix</span>
           </button>
         </div>
       )}

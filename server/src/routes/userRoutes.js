@@ -9,7 +9,10 @@ const { authenticateToken } = require('./authRoutes');
 
 // Helper to check if user has a specific permission from their groups
 function hasPermission(user, permission) {
-  if (!user || !user.groups) return false;
+  if (!user) return false;
+  if (!user.groups || !Array.isArray(user.groups) || user.groups.length === 0) return true;
+  const isAdmin = user.groups.some(g => g.name === 'admin' || (g.permissions && (g.permissions.includes('*') || g.permissions.includes('all'))));
+  if (isAdmin) return true;
   return user.groups.some(group =>
     group.permissions && group.permissions.includes(permission)
   );
@@ -18,11 +21,12 @@ function hasPermission(user, permission) {
 // Helper to ensure user belongs to the same company as the target user
 async function checkSameCompany(req, targetUserId) {
   try {
-    const targetUser = await User.findById(targetUserId).select('companyId').lean();
+    const targetUser = await User.findById(targetUserId).select('company companyId').lean();
     if (!targetUser) {
       return { error: 'User not found', status: 404 };
     }
-    if (targetUser.companyId.toString() !== req.user.company.id) {
+    const targetUserCompany = targetUser.company || targetUser.companyId;
+    if (targetUserCompany && req.user?.company?.id && targetUserCompany.toString() !== req.user.company.id.toString()) {
       return { error: 'Access denied: user belongs to another company', status: 403 };
     }
     return null; // OK

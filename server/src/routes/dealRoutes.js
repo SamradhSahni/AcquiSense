@@ -57,7 +57,13 @@ router.post('/', async (req, res) => {
   const { name, targetCompany, acquirer, modelProfile } = req.body;
   if (!name) return res.status(400).json({ error: 'Deal name is required' });
 
-  const deal = await Deal.create({ name, targetCompany, acquirer, modelProfile });
+  const deal = await Deal.create({
+    name,
+    targetCompany,
+    acquirer,
+    modelProfile,
+    companyId: req.user?.company?.id || null,
+  });
   res.status(201).json(deal);
 });
 

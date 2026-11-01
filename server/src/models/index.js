@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 // ── Deal ──────────────────────────────────────────────────────────────────────
 const DealSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
+  companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
   targetCompany: { type: String, default: '' },
   acquirer: { type: String, default: '' },
   modelProfile: { type: String, enum: ['economy', 'standard', 'premium'], default: 'standard' },

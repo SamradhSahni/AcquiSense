@@ -1,65 +1,83 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Sparkles, 
+  X, 
+  Search, 
+  ArrowUp, 
+  CheckCircle2, 
+  AlertTriangle, 
+  FileText, 
+  Paperclip, 
+  ChevronDown, 
+  ChevronUp, 
+  Bot,
+  HelpCircle
+} from 'lucide-react';
 import './CopilotPanel.css';
+import { askCopilot } from '../../services/api';
 
 const SUGGESTED_QUERIES = [
-  'Why is this deal considered high risk?',
-  'Show me all P0 and P1 findings.',
-  'Which findings could affect valuation?',
-  'Are there legal risks connected to cybersecurity findings?',
-  'What should I ask management in due diligence?',
-  'Compare Finance and Commercial findings.',
-  'Which findings have weak evidence?',
-  'Which risks are dependent on each other?',
+  'Why is this deal classified under current risk posture?',
+  'Synthesize all P0 and P1 liabilities across domains.',
+  'Which forensic findings directly impact EBITDA / valuation?',
+  'Are there regulatory exposure vectors linked to cyber findings?',
+  'What key questions should the IC demand of management?',
+  'Compare Finance and Commercial diligence findings.',
+  'Which finding citations indicate missing contract clauses?',
+  'What compound risks create cascade liability?',
 ];
 
 const SEVERITY_COLORS = {
-  P0: '#ef4444',
-  P1: '#f97316',
-  P2: '#eab308',
-  P3: '#22c55e',
+  P0: 'var(--risk-p0, #F43F5E)',
+  P1: 'var(--risk-p1, #F97316)',
+  P2: 'var(--risk-p2, #F59E0B)',
+  P3: 'var(--risk-p3, #10B981)',
 };
 
 const DOMAIN_COLORS = {
-  finance:    '#6366f1',
-  legal:      '#8b5cf6',
-  commercial: '#06b6d4',
-  tech:       '#3b82f6',
-  cyber:      '#ef4444',
-  hr:         '#ec4899',
-  tax:        '#f59e0b',
-  regulatory: '#14b8a6',
-  esg:        '#22c55e',
+  finance:    'var(--domain-finance, #10B981)',
+  legal:      'var(--domain-legal, #38BDF8)',
+  commercial: 'var(--domain-commercial, #6366F1)',
+  tech:       'var(--domain-tech, #818CF8)',
+  cyber:      'var(--domain-cyber, #F43F5E)',
+  hr:         'var(--domain-hr, #EC4899)',
+  tax:        'var(--domain-tax, #F59E0B)',
+  regulatory: 'var(--domain-regulatory, #14B8A6)',
+  esg:        'var(--domain-esg, #84CC16)',
 };
 
-function CitationCard({ citation, index }) {
+function CitationCard({ citation }) {
   const [expanded, setExpanded] = useState(false);
-  const domainColor = DOMAIN_COLORS[citation.domain] || '#6366f1';
-  const sevColor = SEVERITY_COLORS[citation.severity] || '#eab308';
+  const domainColor = DOMAIN_COLORS[citation.domain] || 'var(--domain-commercial)';
+  const sevColor = SEVERITY_COLORS[citation.severity] || 'var(--risk-p2)';
 
   return (
-    <div className="citation-card" onClick={() => setExpanded(!expanded)}>
+    <div className="citation-card glass-panel" onClick={() => setExpanded(!expanded)}>
       <div className="citation-card-header">
-        <span className="citation-ref">[{citation.ref_id}]</span>
-        <span className="citation-severity-badge" style={{ background: sevColor }}>
+        <span className="citation-ref tabular-nums">[{citation.ref_id}]</span>
+        <span className="citation-severity-badge tabular-nums" style={{ background: sevColor }}>
           {citation.severity}
         </span>
-        <span className="citation-domain-badge" style={{ background: domainColor }}>
+        <span className="citation-domain-badge" style={{ color: domainColor, borderColor: `color-mix(in srgb, ${domainColor} 30%, transparent)` }}>
           {citation.domain}
         </span>
         <span className="citation-title">{citation.title}</span>
-        <span className="citation-expand-icon">{expanded ? '▲' : '▼'}</span>
+        <span className="citation-expand-icon">
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </span>
       </div>
       {expanded && (
         <div className="citation-card-body">
           {citation.file && (
             <div className="citation-source">
-              📄 <span>{citation.file}</span>
-              {citation.page > 0 && <span className="citation-page">p.{citation.page}</span>}
+              <FileText size={12} className="citation-file-icon" />
+              <span className="citation-file-name">{citation.file}</span>
+              {citation.page > 0 && <span className="citation-page tabular-nums">Page {citation.page}</span>}
             </div>
           )}
           {citation.quote && (
             <blockquote className="citation-quote">
-              "{citation.quote.slice(0, 250)}{citation.quote.length > 250 ? '…' : ''}"
+              "{citation.quote.slice(0, 280)}{citation.quote.length > 280 ? '…' : ''}"
             </blockquote>
           )}
         </div>
@@ -75,15 +93,16 @@ function Message({ message }) {
     <div className={`message-wrapper ${isUser ? 'user' : 'assistant'}`}>
       {!isUser && (
         <div className="message-avatar">
-          <span>🤖</span>
+          <Bot size={15} />
         </div>
       )}
       <div className="message-content-wrapper">
-        <div className={`message-bubble ${isUser ? 'user-bubble' : 'assistant-bubble'}`}>
+        <div className={`message-bubble ${isUser ? 'user-bubble' : 'assistant-bubble glass-panel'}`}>
           <p className="message-text">{message.content}</p>
           {message.confidence && (
             <div className={`confidence-badge confidence-${message.confidence}`}>
-              {message.confidence === 'high' ? '✓' : message.confidence === 'medium' ? '~' : '?'} {message.confidence} confidence
+              {message.confidence === 'high' ? <CheckCircle2 size={11} /> : <HelpCircle size={11} />}
+              <span>{message.confidence.toUpperCase()} CONFIDENCE</span>
             </div>
           )}
         </div>
@@ -91,12 +110,15 @@ function Message({ message }) {
         {/* Domain badges */}
         {message.domains_searched && message.domains_searched.length > 0 && (
           <div className="domains-searched">
-            <span className="domains-label">Searched:</span>
+            <span className="domains-label">SEARCHED:</span>
             {message.domains_searched.map(d => (
               <span
                 key={d}
                 className="domain-badge"
-                style={{ background: DOMAIN_COLORS[d] || '#6366f1' }}
+                style={{ 
+                  color: DOMAIN_COLORS[d] || 'var(--domain-commercial)',
+                  borderColor: `color-mix(in srgb, ${DOMAIN_COLORS[d] || '#6366F1'} 35%, transparent)`
+                }}
               >
                 {d}
               </span>
@@ -108,10 +130,11 @@ function Message({ message }) {
         {message.citations && message.citations.length > 0 && (
           <div className="citations-section">
             <div className="citations-header">
-              📎 {message.citations.length} source{message.citations.length > 1 ? 's' : ''}
+              <Paperclip size={12} />
+              <span>{message.citations.length} GROUNDED VDR CITATION{message.citations.length > 1 ? 'S' : ''}</span>
             </div>
             {message.citations.map((c, i) => (
-              <CitationCard key={i} citation={c} index={i} />
+              <CitationCard key={i} citation={c} />
             ))}
           </div>
         )}
@@ -119,7 +142,8 @@ function Message({ message }) {
         {/* Guardrail warnings */}
         {message.guardrail_warnings && message.guardrail_warnings.length > 0 && (
           <div className="guardrail-warning">
-            ⚠️ {message.guardrail_warnings.join(', ')}
+            <AlertTriangle size={13} />
+            <span>{message.guardrail_warnings.join(', ')}</span>
           </div>
         )}
       </div>
@@ -130,12 +154,14 @@ function Message({ message }) {
 function ThinkingIndicator() {
   return (
     <div className="message-wrapper assistant">
-      <div className="message-avatar"><span>🤖</span></div>
-      <div className="thinking-bubble">
+      <div className="message-avatar">
+        <Bot size={15} />
+      </div>
+      <div className="thinking-bubble glass-panel">
         <div className="thinking-dots">
           <span></span><span></span><span></span>
         </div>
-        <span className="thinking-label">AcquiSense Copilot is thinking…</span>
+        <span className="thinking-label">AcquiSense RAG engine is reasoning across 9 domain knowledge graphs…</span>
       </div>
     </div>
   );
@@ -173,24 +199,15 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
     setLoading(true);
 
     try {
-      const response = await fetch(`/api/python/copilot/${dealId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          job_id: jobId,
-          conversation_history: buildHistory(),
-        }),
+      const data = await askCopilot(dealId, {
+        query,
+        job_id: jobId,
+        conversation_history: buildHistory(),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
       const assistantMsg = {
         role: 'assistant',
-        content: data.answer || 'I was unable to generate a response. Please try again.',
+        content: data.answer || 'I was unable to synthesize a response across current deal findings.',
         citations: data.citations || [],
         domains_searched: data.domains_searched || [],
         confidence: data.confidence || 'medium',
@@ -202,7 +219,7 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
     } catch (err) {
       const errMsg = {
         role: 'assistant',
-        content: `⚠️ Error: ${err.message}. Please ensure the analysis is complete and try again.`,
+        content: `Error: ${err?.response?.data?.detail || err?.response?.data?.error || err.message}. Please verify the analysis is complete and try again.`,
         citations: [],
         domains_searched: [],
         id: Date.now() + 1,
@@ -231,15 +248,18 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
         <div className="copilot-header">
           <div className="copilot-header-left">
             <div className="copilot-logo">
-              <span className="copilot-logo-icon">⚡</span>
+              <Sparkles size={18} className="copilot-logo-icon" />
             </div>
             <div className="copilot-header-text">
-              <h2 className="copilot-title">AcquiSense Copilot</h2>
-              <p className="copilot-subtitle">Citation-grounded · 9 domain RAG · Guardrailed</p>
+              <div className="copilot-title-row">
+                <h2 className="copilot-title">AcquiSense Forensic Copilot</h2>
+                <span className="copilot-pill">9-DOMAIN RAG</span>
+              </div>
+              <p className="copilot-subtitle">Citation-grounded · Cryptographically audited · Guardrailed</p>
             </div>
           </div>
           <button className="copilot-close-btn" onClick={onClose} aria-label="Close Copilot">
-            ✕
+            <X size={16} />
           </button>
         </div>
 
@@ -247,18 +267,20 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
         <div className="copilot-messages">
           {messages.length === 0 && showSuggestions && (
             <div className="copilot-welcome">
-              <div className="welcome-icon">🔍</div>
-              <h3>Ask anything about this deal</h3>
-              <p>I'll search across all 9 domain findings and surface grounded, cited answers.</p>
+              <div className="welcome-icon-well">
+                <Search size={32} />
+              </div>
+              <h3>Interrogate Deal Data Room</h3>
+              <p>Autonomous RAG intelligence connected to all 9 domain forensic vectors and evidence citations.</p>
               <div className="suggestion-chips-grid">
                 {SUGGESTED_QUERIES.map((q, i) => (
                   <button
                     key={i}
-                    className="suggestion-chip"
+                    className="suggestion-chip glass-panel glass-panel--interactive"
                     onClick={() => sendMessage(q)}
                     disabled={loading}
                   >
-                    {q}
+                    <span>{q}</span>
                   </button>
                 ))}
               </div>
@@ -274,16 +296,16 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
           {/* Follow-up suggestions after last assistant message */}
           {!loading && followUps.length > 0 && (
             <div className="follow-up-section">
-              <span className="follow-up-label">Follow-up:</span>
+              <span className="follow-up-label">SUGGESTED REASONING TRAJECTORIES:</span>
               <div className="follow-up-chips">
                 {followUps.map((q, i) => (
                   <button
                     key={i}
-                    className="follow-up-chip"
+                    className="follow-up-chip glass-panel glass-panel--interactive"
                     onClick={() => sendMessage(q)}
                     disabled={loading}
                   >
-                    {q}
+                    <span>{q}</span>
                   </button>
                 ))}
               </div>
@@ -293,16 +315,16 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input bar */}
+        {/* Floating Composer Bar */}
         <div className="copilot-input-area">
-          <div className="copilot-input-wrapper">
+          <div className="copilot-input-wrapper glass-panel">
             <textarea
               ref={inputRef}
               className="copilot-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about findings, risks, documents, cross-references…"
+              placeholder="Ask about liabilities, EBITDA adjustments, zero-day CVEs, covenants…"
               rows={2}
               disabled={loading}
               maxLength={600}
@@ -311,18 +333,18 @@ export default function CopilotPanel({ dealId, jobId, onClose }) {
               className="copilot-send-btn"
               onClick={() => sendMessage()}
               disabled={loading || !input.trim()}
-              aria-label="Send message"
+              aria-label="Send query"
             >
               {loading ? (
-                <span className="send-spinner"></span>
+                <div className="send-spinner" />
               ) : (
-                <span>↑</span>
+                <ArrowUp size={18} />
               )}
             </button>
           </div>
-          <div className="copilot-input-footer">
+          <div className="copilot-input-footer tabular-nums">
             <span className="char-count">{input.length}/600</span>
-            <span className="input-hint">⏎ Send · Shift+⏎ New line · Guardrailed by AcquiSense</span>
+            <span className="input-hint">Enter to send · Shift+Enter for new line · Grounded by AcquiSense Guardrails</span>
           </div>
         </div>
 

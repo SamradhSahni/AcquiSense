@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  AcquiSense — Podman Quadlet Pod Definition
+#  Install: Copy to ~/.config/containers/systemd/ (rootless)
+#           or /etc/containers/systemd/ (system-wide)
+#  Reload:  systemctl --user daemon-reload
+#  Start:   systemctl --user start acquisense.pod
+# ─────────────────────────────────────────────────────────────────────────────
+[Unit]
+Description=AcquiSense Due Diligence Platform Pod
+After=network-online.target
+
+[Pod]
+PodName=acquisense
+PublishPort=5173:3000
+PublishPort=4100:4000
+PublishPort=8100:8000
+PublishPort=3200:3001
+PublishPort=9190:9090
+PublishPort=27117:27017
+PublishPort=6479:6379
+
+[Install]
+WantedBy=default.target
+

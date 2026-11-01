@@ -1,0 +1,18 @@
+[Unit]
+Description=AcquiSense Redis 7 Cache & Task Broker
+PartOf=acquisense.pod
+After=acquisense.pod
+
+[Container]
+ContainerName=acquisense-redis
+Pod=acquisense.pod
+Image=docker.io/library/redis:7-alpine
+Exec=redis-server --requirepass redispassword --appendonly yes
+Volume=acquisense-redis-data:/data:z
+HealthCmd=redis-cli -a redispassword ping
+HealthInterval=10s
+HealthRetries=5
+
+[Install]
+WantedBy=default.target
+

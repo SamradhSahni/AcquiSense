@@ -1,0 +1,22 @@
+[Unit]
+Description=AcquiSense Python FastAPI AI Engine
+PartOf=acquisense.pod
+After=acquisense-mongodb.service acquisense-redis.service
+
+[Container]
+ContainerName=acquisense-backend
+Pod=acquisense.pod
+Image=localhost/acquisense-backend:latest
+Environment=MONGO_URI=mongodb://ddadmin:ddpassword@127.0.0.1:27017/diligence?authSource=admin
+Environment=REDIS_URL=redis://:redispassword@127.0.0.1:6379/0
+Environment=UPLOAD_DIR=/app/uploads
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=%h/acquisense/.env
+Volume=acquisense-uploads-data:/app/uploads:z
+HealthCmd=curl -f http://localhost:8000/health
+HealthInterval=20s
+HealthRetries=5
+
+[Install]
+WantedBy=default.target
+

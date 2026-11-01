@@ -1,0 +1,23 @@
+[Unit]
+Description=AcquiSense Grafana Telemetry Dashboard
+PartOf=acquisense.pod
+After=acquisense-prometheus.service
+
+[Container]
+ContainerName=acquisense-grafana
+Pod=acquisense.pod
+Image=docker.io/grafana/grafana:10.4.0
+Environment=GF_SECURITY_ADMIN_USER=admin
+Environment=GF_SECURITY_ADMIN_PASSWORD=grafanapassword
+Environment=GF_USERS_ALLOW_SIGN_UP=false
+Environment=GF_SERVER_HTTP_PORT=3001
+Volume=acquisense-grafana-data:/var/lib/grafana:z
+Volume=%h/acquisense/grafana/provisioning:/etc/grafana/provisioning:ro,z
+Volume=%h/acquisense/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+HealthCmd=wget -qO- http://localhost:3001/api/health || exit 1
+HealthInterval=20s
+HealthRetries=5
+
+[Install]
+WantedBy=default.target
+

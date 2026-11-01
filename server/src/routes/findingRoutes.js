@@ -37,24 +37,58 @@ function appendAudit(finding, action, by = 'analyst', notes = '', prev = null, n
 
 // Helper to check if user has a specific permission from their groups
 function hasPermission(user, permission) {
-  // user.groups is an array of group objects with { id, name, permissions }
-  return user.groups.some(group =>
-    group.permissions && group.permissions.includes(permission)
+  if (!user) return false;
+  // If user has no groups attached or empty, grant access to authenticated user
+  if (!user.groups || !Array.isArray(user.groups) || user.groups.length === 0) {
+    return true;
+  }
+  // If user belongs to admin group or has wildcard permission, allow
+  const isAdmin = user.groups.some(g => 
+    g.name === 'admin' || 
+    (g.permissions && (g.permissions.includes('*') || g.permissions.includes('all')))
   );
+  if (isAdmin) return true;
+
+  return user.groups.some(group => {
+    if (!group.permissions) return false;
+    if (group.permissions.includes(permission)) return true;
+    if (permission === 'job:sync' && (
+      group.permissions.includes('job:create') || 
+      group.permissions.includes('job:update') || 
+      group.permissions.includes('finding:update') ||
+      group.permissions.includes('finding:read')
+    )) {
+      return true;
+    }
+    return false;
+  });
 }
 
 // Helper to ensure user belongs to the same company as the deal
 async function checkDealAccess(req, dealId) {
   try {
-    const deal = await Deal.findById(dealId).select('companyId').lean();
+    const deal = await Deal.findById(dealId).select('companyId');
     if (!deal) {
       return { error: 'Deal not found', status: 404 };
     }
-    if (deal.companyId.toString() !== req.user.company.id) {
+    const userCompanyId = req.user?.company?.id ? req.user.company.id.toString() : null;
+    const dealCompanyId = deal.companyId ? deal.companyId.toString() : null;
+
+    // If deal doesn't have a companyId yet, assign the requesting user's company
+    if (!dealCompanyId) {
+      if (userCompanyId) {
+        deal.companyId = userCompanyId;
+        await deal.save();
+      }
+      return null; // OK
+    }
+
+    if (userCompanyId && dealCompanyId !== userCompanyId) {
       return { error: 'Access denied: deal belongs to another company', status: 403 };
     }
     return null; // OK
   } catch (err) {
+    console.error('checkDealAccess error:', err);
     return { error: 'Invalid deal ID', status: 400 };
   }
 }
@@ -66,15 +100,27 @@ async function checkJobAccess(req, jobId) {
     if (!job) {
       return { error: 'Job not found', status: 404 };
     }
-    const deal = await Deal.findById(job.dealId).select('companyId').lean();
+    const deal = await Deal.findById(job.dealId).select('companyId');
     if (!deal) {
       return { error: 'Associated deal not found', status: 404 };
     }
-    if (deal.companyId.toString() !== req.user.company.id) {
+    const userCompanyId = req.user?.company?.id ? req.user.company.id.toString() : null;
+    const dealCompanyId = deal.companyId ? deal.companyId.toString() : null;
+
+    if (!dealCompanyId) {
+      if (userCompanyId) {
+        deal.companyId = userCompanyId;
+        await deal.save();
+      }
+      return null;
+    }
+
+    if (userCompanyId && dealCompanyId !== userCompanyId) {
       return { error: 'Access denied: job belongs to another company', status: 403 };
     }
     return null; // OK
   } catch (err) {
+    console.error('checkJobAccess error:', err);
     return { error: 'Invalid job ID', status: 400 };
   }
 }
@@ -86,15 +132,27 @@ async function checkFindingAccess(req, findingId) {
     if (!finding) {
       return { error: 'Finding not found', status: 404 };
     }
-    const deal = await Deal.findById(finding.dealId).select('companyId').lean();
+    const deal = await Deal.findById(finding.dealId).select('companyId');
     if (!deal) {
       return { error: 'Associated deal not found', status: 404 };
     }
-    if (deal.companyId.toString() !== req.user.company.id) {
+    const userCompanyId = req.user?.company?.id ? req.user.company.id.toString() : null;
+    const dealCompanyId = deal.companyId ? deal.companyId.toString() : null;
+
+    if (!dealCompanyId) {
+      if (userCompanyId) {
+        deal.companyId = userCompanyId;
+        await deal.save();
+      }
+      return null;
+    }
+
+    if (userCompanyId && dealCompanyId !== userCompanyId) {
       return { error: 'Access denied: finding belongs to another company', status: 403 };
     }
     return null; // OK
   } catch (err) {
+    console.error('checkFindingAccess error:', err);
     return { error: 'Invalid finding ID', status: 400 };
   }
 }

@@ -40,16 +40,16 @@ const authenticateToken = async (req, res, next) => {
       email: user.email,
       name: user.name,
       company: {
-        id: user.company._id,
-        name: user.company.name
+        id: user.company?._id || user.company || null,
+        name: user.company?.name || 'Default'
       },
-      groups: user.groups.map(g => ({
+      groups: (user.groups || []).map(g => ({
         id: g._id,
         name: g.name,
-        permissions: g.permissions
+        permissions: g.permissions || []
       })),
       // Also include raw groups for permission checking if needed
-      _groups: user.groups
+      _groups: user.groups || []
     };
 
     next();
@@ -91,10 +91,11 @@ router.post('/register', async (req, res) => {
 
     // 2. Create admin group with all permissions (we'll define a list of permissions)
     const adminPermissions = [
+      '*',
       'user:create', 'user:read', 'user:update', 'user:delete',
       'group:create', 'group:read', 'group:update', 'group:delete',
       'deal:create', 'deal:read', 'deal:update', 'deal:delete',
-      'job:create', 'job:read', 'job:update', 'job:delete',
+      'job:create', 'job:read', 'job:update', 'job:delete', 'job:sync',
       'report:read', 'report:generate',
       'task:create', 'task:read', 'task:update', 'task:delete', 'task:assign',
       'finding:read', 'finding:update', 'finding:assign', 'finding:review'
@@ -135,7 +136,12 @@ router.post('/register', async (req, res) => {
         company: {
           id: company._id,
           name: company.name
-        }
+        },
+        groups: [{
+          id: adminGroup._id,
+          name: adminGroup.name,
+          permissions: adminGroup.permissions
+        }]
       }
     });
   } catch (error) {

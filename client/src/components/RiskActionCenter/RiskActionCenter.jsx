@@ -1,49 +1,110 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Zap, 
+  RefreshCw, 
+  Circle, 
+  User, 
+  Wrench, 
+  CheckCircle2, 
+  CheckCheck, 
+  Bot, 
+  Edit3, 
+  XCircle, 
+  Pin, 
+  AlertTriangle,
+  X,
+  Plus,
+  ShieldCheck
+} from 'lucide-react';
 import './RiskActionCenter.css';
 import { getUser } from '../../services/auth';
+import {
+  getDealFindings,
+  getDealFindingsSummary,
+  syncJobFindings,
+  actionFinding,
+  reviewFinding
+} from '../../services/api';
 
-const SEV_COLORS  = { P0: '#ef4444', P1: '#f97316', P2: '#eab308', P3: '#22c55e' };
+const SEV_COLORS = {
+  P0: 'var(--risk-p0, #F43F5E)',
+  P1: 'var(--risk-p1, #F97316)',
+  P2: 'var(--risk-p2, #F59E0B)',
+  P3: 'var(--risk-p3, #10B981)',
+};
+
 const DOMAIN_COLORS = {
-  finance: '#6366f1', legal: '#8b5cf6', commercial: '#06b6d4',
-  tech: '#3b82f6', cyber: '#ef4444', hr: '#ec4899',
-  tax: '#f59e0b', regulatory: '#14b8a6', esg: '#22c55e',
+  finance: 'var(--domain-finance, #10B981)',
+  legal: 'var(--domain-legal, #38BDF8)',
+  commercial: 'var(--domain-commercial, #6366F1)',
+  tech: 'var(--domain-tech, #818CF8)',
+  cyber: 'var(--domain-cyber, #F43F5E)',
+  hr: 'var(--domain-hr, #EC4899)',
+  tax: 'var(--domain-tax, #F59E0B)',
+  regulatory: 'var(--domain-regulatory, #14B8A6)',
+  esg: 'var(--domain-esg, #84CC16)',
 };
+
 const STATE_CONFIG = {
-  open:        { label: 'Open',        color: '#64748b', icon: '◯' },
-  assigned:    { label: 'Assigned',    color: '#6366f1', icon: '👤' },
-  remediating: { label: 'Remediating', color: '#f97316', icon: '🔧' },
-  verified:    { label: 'Verified',    color: '#3b82f6', icon: '✓' },
-  closed:      { label: 'Closed',      color: '#22c55e', icon: '✔' },
+  open:        { label: 'Open',        color: 'var(--text-tertiary)', icon: Circle },
+  assigned:    { label: 'Assigned',    color: 'var(--domain-commercial)', icon: User },
+  remediating: { label: 'Remediating', color: 'var(--risk-p1)', icon: Wrench },
+  verified:    { label: 'Verified',    color: 'var(--ai-primary)', icon: CheckCircle2 },
+  closed:      { label: 'Closed',      color: 'var(--risk-p3)', icon: CheckCheck },
 };
+
 const REVIEW_CONFIG = {
-  ai_generated: { label: 'AI Generated', color: '#6366f1', icon: '🤖' },
-  confirmed:    { label: 'Confirmed',    color: '#22c55e', icon: '✓' },
-  modified:     { label: 'Modified',     color: '#f59e0b', icon: '✏️' },
-  rejected:     { label: 'Rejected',     color: '#ef4444', icon: '✕' },
+  ai_generated: { label: 'AI Generated', color: 'var(--domain-commercial)', icon: Bot },
+  confirmed:    { label: 'Confirmed',    color: 'var(--risk-p3)', icon: CheckCircle2 },
+  modified:     { label: 'Modified',     color: 'var(--risk-p2)', icon: Edit3 },
+  rejected:     { label: 'Rejected',     color: 'var(--risk-p0)', icon: XCircle },
 };
 
 // Helper to check if user has a specific permission from their groups
 function hasPermission(user, permission) {
-  if (!user || !user.groups) return false;
-  return user.groups.some(group =>
-    group.permissions && group.permissions.includes(permission)
+  if (!user) return false;
+  // If user has no groups defined/empty (e.g. legacy login or single-tenant), default to allow
+  if (!user.groups || !Array.isArray(user.groups) || user.groups.length === 0) return true;
+  // If user belongs to admin group or has wildcard permission, allow
+  const isAdmin = user.groups.some(g => 
+    g.name === 'admin' || 
+    (g.permissions && (g.permissions.includes('*') || g.permissions.includes('all')))
   );
+  if (isAdmin) return true;
+
+  return user.groups.some(group => {
+    if (!group.permissions) return false;
+    if (group.permissions.includes(permission)) return true;
+    if (permission === 'job:sync' && (
+      group.permissions.includes('job:create') || 
+      group.permissions.includes('job:update') || 
+      group.permissions.includes('finding:update') ||
+      group.permissions.includes('finding:read')
+    )) {
+      return true;
+    }
+    return false;
+  });
 }
 
 function WorkflowBadge({ state }) {
   const cfg = STATE_CONFIG[state] || STATE_CONFIG.open;
+  const Icon = cfg.icon;
   return (
     <span className="workflow-badge" style={{ borderColor: cfg.color, color: cfg.color }}>
-      {cfg.icon} {cfg.label}
+      <Icon size={11} />
+      <span>{cfg.label}</span>
     </span>
   );
 }
 
 function ReviewBadge({ status }) {
   const cfg = REVIEW_CONFIG[status] || REVIEW_CONFIG.ai_generated;
+  const Icon = cfg.icon;
   return (
-    <span className="review-badge" style={{ background: `${cfg.color}22`, color: cfg.color, borderColor: `${cfg.color}44` }}>
-      {cfg.icon} {cfg.label}
+    <span className="review-badge" style={{ background: `color-mix(in srgb, ${cfg.color} 12%, transparent)`, color: cfg.color, borderColor: `color-mix(in srgb, ${cfg.color} 30%, transparent)` }}>
+      <Icon size={11} />
+      <span>{cfg.label}</span>
     </span>
   );
 }
@@ -68,19 +129,21 @@ function ActionPanel({ finding, onAction, onClose, user }) {
   };
 
   return (
-    <div className="action-panel">
+    <div className="action-panel glass-panel">
       <div className="action-panel-header">
-        <div>
-          <span className="action-panel-sev" style={{ background: SEV_COLORS[finding.severity] }}>
+        <div className="action-panel-title-group">
+          <span className="action-panel-sev tabular-nums" style={{ background: SEV_COLORS[finding.severity] }}>
             {finding.severity}
           </span>
           <strong className="action-panel-title">{finding.title}</strong>
         </div>
-        <button className="action-panel-close" onClick={onClose}>✕</button>
+        <button className="action-panel-close" onClick={onClose}>
+          <X size={16} />
+        </button>
       </div>
 
       <div className="action-panel-meta">
-        <span className="action-domain-badge" style={{ background: DOMAIN_COLORS[finding.domain] || '#6366f1' }}>
+        <span className="action-domain-badge" style={{ background: DOMAIN_COLORS[finding.domain] || 'var(--domain-commercial)' }}>
           {finding.domain}
         </span>
         <WorkflowBadge state={finding.workflowState} />
@@ -91,37 +154,50 @@ function ActionPanel({ finding, onAction, onClose, user }) {
 
       {/* Action Buttons */}
       <div className="action-panel-actions">
-        {/* Assign button - only if user has permission */}
         {['open','assigned'].includes(finding.workflowState) && hasPermission(user, 'finding:assign') && (
-          <button className="rac-btn rac-btn--primary" onClick={() => setMode('assign')}>👤 Assign</button>
+          <button className="rac-btn rac-btn--primary" onClick={() => setMode('assign')}>
+            <User size={13} />
+            <span>Assign</span>
+          </button>
         )}
-        {/* Progress buttons - only if user has permission to update */}
         {finding.workflowState === 'assigned' && hasPermission(user, 'finding:update') && (
           <button className="rac-btn rac-btn--orange" onClick={() => { setNewState('remediating'); setMode('progress'); }}>
-            🔧 Mark Remediating
+            <Wrench size={13} />
+            <span>Mark Remediating</span>
           </button>
         )}
         {finding.workflowState === 'remediating' && hasPermission(user, 'finding:update') && (
           <button className="rac-btn rac-btn--blue" onClick={() => { setNewState('verified'); setMode('progress'); }}>
-            ✓ Mark Verified
+            <CheckCircle2 size={13} />
+            <span>Mark Verified</span>
           </button>
         )}
-        {/* Close button - only if user has permission to update */}
         {finding.workflowState !== 'closed' && hasPermission(user, 'finding:update') && (
           <button className="rac-btn rac-btn--green" onClick={() => { setNewState('closed'); setMode('progress'); }}>
-            ✔ Close
+            <CheckCheck size={13} />
+            <span>Close</span>
           </button>
         )}
-        {/* Condition button - only if user has permission to update */}
         {hasPermission(user, 'finding:update') && (
-          <button className="rac-btn rac-btn--ghost" onClick={() => setMode('condition')}>＋ Condition</button>
+          <button className="rac-btn rac-btn--ghost" onClick={() => setMode('condition')}>
+            <Plus size={13} />
+            <span>Condition</span>
+          </button>
         )}
-        {/* Review buttons - only if user has permission to review */}
         {finding.reviewStatus === 'ai_generated' && hasPermission(user, 'finding:review') && (
           <>
-            <button className="rac-btn rac-btn--confirm" onClick={() => setMode('confirm')}>✓ Confirm</button>
-            <button className="rac-btn rac-btn--modify" onClick={() => setMode('modify')}>✏️ Modify</button>
-            <button className="rac-btn rac-btn--reject" onClick={() => setMode('reject')}>✕ Reject</button>
+            <button className="rac-btn rac-btn--confirm" onClick={() => setMode('confirm')}>
+              <CheckCircle2 size={13} />
+              <span>Confirm</span>
+            </button>
+            <button className="rac-btn rac-btn--modify" onClick={() => setMode('modify')}>
+              <Edit3 size={13} />
+              <span>Modify</span>
+            </button>
+            <button className="rac-btn rac-btn--reject" onClick={() => setMode('reject')}>
+              <XCircle size={13} />
+              <span>Reject</span>
+            </button>
           </>
         )}
       </div>
@@ -130,11 +206,11 @@ function ActionPanel({ finding, onAction, onClose, user }) {
       {mode === 'assign' && (
         <div className="action-form">
           <label>Assign to (email)</label>
-          <input value={assignTo} onChange={e => setAssignTo(e.target.value)} placeholder="analyst@firm.com" />
+          <input className="glass-input" value={assignTo} onChange={e => setAssignTo(e.target.value)} placeholder="analyst@firm.com" />
           <label>Due date (optional)</label>
-          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          <input className="glass-input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
           <button className="rac-btn rac-btn--primary" onClick={submit} disabled={submitting || !assignTo}>
-            {submitting ? 'Saving…' : 'Assign'}
+            {submitting ? 'Saving…' : 'Assign Finding'}
           </button>
         </div>
       )}
@@ -142,7 +218,7 @@ function ActionPanel({ finding, onAction, onClose, user }) {
       {mode === 'condition' && (
         <div className="action-form">
           <label>Add condition / dependency</label>
-          <input value={condText} onChange={e => setCondText(e.target.value)} placeholder="e.g. Pending legal sign-off from GC" />
+          <input className="glass-input" value={condText} onChange={e => setCondText(e.target.value)} placeholder="e.g. Pending legal sign-off from GC" />
           <button className="rac-btn rac-btn--primary" onClick={submit} disabled={submitting || !condText}>
             {submitting ? 'Adding…' : 'Add Condition'}
           </button>
@@ -152,7 +228,7 @@ function ActionPanel({ finding, onAction, onClose, user }) {
       {mode === 'progress' && (
         <div className="action-form">
           <label>Notes (optional)</label>
-          <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} rows={2} placeholder="Add context…" />
+          <textarea className="glass-input" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} rows={2} placeholder="Add context…" />
           <button className="rac-btn rac-btn--primary" onClick={submit} disabled={submitting}>
             {submitting ? 'Saving…' : `Confirm → ${STATE_CONFIG[newState]?.label}`}
           </button>
@@ -162,13 +238,13 @@ function ActionPanel({ finding, onAction, onClose, user }) {
       {(mode === 'confirm' || mode === 'reject') && (
         <div className="action-form">
           <label>Notes (optional)</label>
-          <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} rows={2}
+          <textarea className="glass-input" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} rows={2}
             placeholder={mode === 'reject' ? 'Reason for rejection…' : 'Add any notes…'} />
           <button
             className={`rac-btn ${mode === 'reject' ? 'rac-btn--reject' : 'rac-btn--confirm'}`}
             onClick={submit} disabled={submitting}
           >
-            {submitting ? 'Saving…' : mode === 'confirm' ? '✓ Confirm Finding' : '✕ Reject Finding'}
+            {submitting ? 'Saving…' : mode === 'confirm' ? 'Confirm Finding' : 'Reject Finding'}
           </button>
         </div>
       )}
@@ -176,17 +252,17 @@ function ActionPanel({ finding, onAction, onClose, user }) {
       {mode === 'modify' && (
         <div className="action-form">
           <label>Title</label>
-          <input value={modTitle} onChange={e => setModTitle(e.target.value)} />
+          <input className="glass-input" value={modTitle} onChange={e => setModTitle(e.target.value)} />
           <label>Description</label>
-          <textarea value={modDesc} onChange={e => setModDesc(e.target.value)} rows={3} />
+          <textarea className="glass-input" value={modDesc} onChange={e => setModDesc(e.target.value)} rows={3} />
           <label>Severity</label>
-          <select value={modSev} onChange={e => setModSev(e.target.value)}>
+          <select className="glass-input" value={modSev} onChange={e => setModSev(e.target.value)}>
             {['P0','P1','P2','P3'].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <label>Notes</label>
-          <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} rows={2} placeholder="What did you change and why?" />
+          <textarea className="glass-input" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} rows={2} placeholder="What did you change and why?" />
           <button className="rac-btn rac-btn--modify" onClick={submit} disabled={submitting}>
-            {submitting ? 'Saving…' : '✏️ Save Modifications'}
+            {submitting ? 'Saving…' : 'Save Modifications'}
           </button>
         </div>
       )}
@@ -197,8 +273,11 @@ function ActionPanel({ finding, onAction, onClose, user }) {
           <div className="conditions-title">Conditions</div>
           {finding.conditions.map(c => (
             <div key={c._id} className="condition-item">
-              <span>📌 {c.text}</span>
-              <span className="condition-meta">— {c.addedBy}</span>
+              <div className="condition-text">
+                <Pin size={12} className="condition-pin" />
+                <span>{c.text}</span>
+              </div>
+              <span className="condition-meta tabular-nums">— {c.addedBy}</span>
             </div>
           ))}
         </div>
@@ -216,49 +295,53 @@ export default function RiskActionCenter({ dealId, jobId, report }) {
   const [selected, setSelected]     = useState(null);
   const [filters, setFilters]       = useState({ domain: 'all', severity: 'all', workflowState: 'all', reviewStatus: 'all' });
   const [summary, setSummary]       = useState(null);
-  const user = getUser(); // Get user from localStorage (set during login/register)
+  const user = getUser();
 
   const loadFindings = useCallback(async () => {
     if (!dealId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: 100 });
-      if (filters.domain !== 'all')        params.set('domain', filters.domain);
-      if (filters.severity !== 'all')      params.set('severity', filters.severity);
-      if (filters.workflowState !== 'all') params.set('workflowState', filters.workflowState);
-      if (filters.reviewStatus !== 'all')  params.set('reviewStatus', filters.reviewStatus);
+      const params = { limit: 100 };
+      if (filters.domain !== 'all')        params.domain = filters.domain;
+      if (filters.severity !== 'all')      params.severity = filters.severity;
+      if (filters.workflowState !== 'all') params.workflowState = filters.workflowState;
+      if (filters.reviewStatus !== 'all')  params.reviewStatus = filters.reviewStatus;
 
       const [fRes, sRes] = await Promise.all([
-        fetch(`/api/findings/deal/${dealId}?${params}`).then(r => r.json()),
-        fetch(`/api/findings/deal/${dealId}/summary`).then(r => r.json()),
+        getDealFindings(dealId, params),
+        getDealFindingsSummary(dealId),
       ]);
-      setFindings(fRes.findings || []);
-      setTotal(fRes.total || 0);
+      setFindings(fRes?.findings || []);
+      setTotal(fRes?.total || 0);
       setSummary(sRes);
+      setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err?.response?.data?.error || err.message);
     } finally {
       setLoading(false);
     }
-  }, [dealId, filters, user]); // Re-fetch if user changes (permission changes)
+  }, [dealId, filters.domain, filters.severity, filters.workflowState, filters.reviewStatus]);
 
-  useEffect(() => { loadFindings(); }, [loadFindings]);
+  useEffect(() => { 
+    loadFindings(); 
+  }, [loadFindings]);
 
   const syncFindings = async () => {
-    if (!jobId) return;
-    // Check if user has permission to sync
+    if (!jobId) {
+      alert('No completed analysis job found for this deal to sync findings from.');
+      return;
+    }
     if (!hasPermission(user, 'job:sync')) {
       alert('You do not have permission to sync findings.');
       return;
     }
     setSyncing(true);
     try {
-      const res = await fetch(`/api/findings/sync/${jobId}`, { method: 'POST' });
-      const data = await res.json();
+      const data = await syncJobFindings(jobId);
       await loadFindings();
-      alert(`✓ ${data.message}`);
+      alert(`Findings synced successfully: ${data.message || 'Updated'}`);
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      alert(`Error: ${err?.response?.data?.error || err.message}`);
     } finally {
       setSyncing(false);
     }
@@ -266,18 +349,15 @@ export default function RiskActionCenter({ dealId, jobId, report }) {
 
   const handleAction = async (mode, findingId, payload) => {
     try {
-      let url, body;
       if (['confirm','reject','modify'].includes(mode)) {
-        url = `/api/findings/${findingId}/review`;
-        body = {
+        await reviewFinding(findingId, {
           reviewStatus: mode === 'modify' ? 'modified' : mode === 'confirm' ? 'confirmed' : 'rejected',
           by: user?.email || 'analyst',
           notes: payload.reviewNotes,
           ...(mode === 'modify' ? { title: payload.modTitle, description: payload.modDesc, severity: payload.modSev } : {}),
-        };
+        });
       } else {
-        url = `/api/findings/${findingId}/action`;
-        body = {
+        await actionFinding(findingId, {
           action: mode === 'assign' ? 'assign'
                : mode === 'condition' ? 'add_condition'
                : mode === 'progress' ? 'progress'
@@ -290,13 +370,12 @@ export default function RiskActionCenter({ dealId, jobId, report }) {
           },
           by: user?.email || 'analyst',
           notes: payload.reviewNotes,
-        };
+        });
       }
-      await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       await loadFindings();
       setSelected(null);
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      alert(`Error: ${err?.response?.data?.error || err.message}`);
     }
   };
 
@@ -308,55 +387,82 @@ export default function RiskActionCenter({ dealId, jobId, report }) {
       {/* Header */}
       <div className="rac-header">
         <div className="rac-header-text">
-          <h2 className="rac-title">⚡ Risk Action Center</h2>
-          <p className="rac-subtitle">Manage, assign, and track remediation for every finding. Review and validate AI-generated findings before finalizing the report.</p>
+          <div className="rac-header-pill">
+            <ShieldCheck size={13} />
+            <span>HUMAN-IN-THE-LOOP GOVERNANCE & REMEDIATION</span>
+          </div>
+          <h2 className="rac-title">Risk Action Center</h2>
+          <p className="rac-subtitle">
+            Assign accountability, track condition precedents, and calibrate AI findings prior to definitive IC report sign-off.
+          </p>
         </div>
         <div className="rac-header-actions">
           {jobId && (
             <button className="rac-btn rac-btn--primary" onClick={syncFindings} disabled={syncing}>
-              {syncing ? '⏳ Syncing…' : '⟳ Sync Findings'}
+              <RefreshCw size={14} className={syncing ? 'spin' : ''} />
+              <span>{syncing ? 'Syncing Findings…' : 'Sync Findings'}</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Summary cards */}
+      {/* 6-Tile Workflow KPI Ribbon */}
       {summary && (
         <div className="rac-summary-grid">
-          {Object.entries(STATE_CONFIG).map(([state, cfg]) => (
-            <div key={state} className="rac-summary-card" onClick={() => setFilters(f => ({ ...f, workflowState: state }))}>
-              <div className="rac-summary-icon">{cfg.icon}</div>
-              <div className="rac-summary-count" style={{ color: cfg.color }}>{summary.workflow?.[state] || 0}</div>
-              <div className="rac-summary-label">{cfg.label}</div>
+          {Object.entries(STATE_CONFIG).map(([state, cfg]) => {
+            const Icon = cfg.icon;
+            const isSelected = filters.workflowState === state;
+
+            return (
+              <div 
+                key={state} 
+                className={`rac-summary-card glass-panel glass-panel--interactive ${isSelected ? 'rac-summary-card--selected' : ''}`} 
+                onClick={() => setFilters(f => ({ ...f, workflowState: isSelected ? 'all' : state }))}
+              >
+                <div className="rac-summary-icon-row">
+                  <Icon size={16} style={{ color: cfg.color }} />
+                  <span className="rac-summary-label">{cfg.label}</span>
+                </div>
+                <div className="rac-summary-count tabular-nums" style={{ color: cfg.color }}>
+                  {summary.workflow?.[state] || 0}
+                </div>
+              </div>
+            );
+          })}
+          <div 
+            className={`rac-summary-card rac-summary-card--review glass-panel glass-panel--interactive ${filters.reviewStatus === 'ai_generated' ? 'rac-summary-card--selected' : ''}`}
+            onClick={() => setFilters(f => ({ ...f, reviewStatus: f.reviewStatus === 'ai_generated' ? 'all' : 'ai_generated' }))}
+          >
+            <div className="rac-summary-icon-row">
+              <Bot size={16} style={{ color: 'var(--domain-commercial)' }} />
+              <span className="rac-summary-label">Needs Review</span>
             </div>
-          ))}
-          <div className="rac-summary-card rac-summary-card--review">
-            <div className="rac-summary-icon">🤖</div>
-            <div className="rac-summary-count" style={{ color: '#6366f1' }}>{summary.review?.ai_generated || 0}</div>
-            <div className="rac-summary-label">Needs Review</div>
+            <div className="rac-summary-count tabular-nums" style={{ color: 'var(--domain-commercial)' }}>
+              {summary.review?.ai_generated || 0}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="rac-filters">
-        <select value={filters.domain} onChange={e => setFilters(f => ({ ...f, domain: e.target.value }))}>
+      {/* Filters Toolbar */}
+      <div className="rac-filters glass-panel">
+        <select className="glass-input rac-filter-select" value={filters.domain} onChange={e => setFilters(f => ({ ...f, domain: e.target.value }))}>
           <option value="all">All Domains</option>
-          {domains.map(d => <option key={d} value={d}>{d}</option>)}
+          {domains.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
         </select>
-        <select value={filters.severity} onChange={e => setFilters(f => ({ ...f, severity: e.target.value }))}>
+        <select className="glass-input rac-filter-select" value={filters.severity} onChange={e => setFilters(f => ({ ...f, severity: e.target.value }))}>
           <option value="all">All Severities</option>
           {['P0','P1','P2','P3'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filters.workflowState} onChange={e => setFilters(f => ({ ...f, workflowState: e.target.value }))}>
+        <select className="glass-input rac-filter-select" value={filters.workflowState} onChange={e => setFilters(f => ({ ...f, workflowState: e.target.value }))}>
           <option value="all">All States</option>
           {Object.entries(STATE_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <select value={filters.reviewStatus} onChange={e => setFilters(f => ({ ...f, reviewStatus: e.target.value }))}>
+        <select className="glass-input rac-filter-select" value={filters.reviewStatus} onChange={e => setFilters(f => ({ ...f, reviewStatus: e.target.value }))}>
           <option value="all">All Review Statuses</option>
           {Object.entries(REVIEW_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <span className="rac-count">{total} findings</span>
+        <span className="rac-count tabular-nums">{total} findings</span>
         {Object.values(filters).some(v => v !== 'all') && (
           <button className="rac-clear-btn" onClick={() => setFilters({ domain: 'all', severity: 'all', workflowState: 'all', reviewStatus: 'all' })}>
             Clear filters
@@ -364,22 +470,33 @@ export default function RiskActionCenter({ dealId, jobId, report }) {
         )}
       </div>
 
-      {error && <div className="rac-error">⚠️ {error}</div>}
+      {error && (
+        <div className="rac-error">
+          <AlertTriangle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Empty sync state */}
       {needsSync && (
-        <div className="rac-empty-state">
-          <div className="rac-empty-icon">⚡</div>
-          <h3>Sync findings to get started</h3>
-          <p>Click "Sync Findings" to import all AI-generated findings from the analysis into the Risk Action Center.</p>
+        <div className="rac-empty-state glass-panel">
+          <div className="rac-empty-icon-well">
+            <Zap size={32} />
+          </div>
+          <h3>Initialize Governance Queue</h3>
+          <p>Import all AI-generated findings from the diligence audit to activate workflow tracking, condition enforcement, and human calibration.</p>
           <button className="rac-btn rac-btn--primary rac-empty-btn" onClick={syncFindings} disabled={syncing}>
-            {syncing ? '⏳ Syncing…' : '⟳ Sync Findings Now'}
+            <RefreshCw size={15} className={syncing ? 'spin' : ''} />
+            <span>{syncing ? 'Importing Pipeline…' : 'Sync Findings Now'}</span>
           </button>
         </div>
       )}
 
       {loading && (
-        <div className="rac-loading"><div className="rac-spinner" /><p>Loading findings…</p></div>
+        <div className="rac-loading">
+          <div className="rac-spinner" />
+          <p>Syncing governance queue…</p>
+        </div>
       )}
 
       {/* Two-column layout: findings list + action panel */}
@@ -390,17 +507,31 @@ export default function RiskActionCenter({ dealId, jobId, report }) {
             {findings.map(f => (
               <div
                 key={f._id}
-                className={`rac-finding-row ${selected?._id === f._id ? 'rac-finding-row--active' : ''} ${f.reviewStatus === 'rejected' ? 'rac-finding-row--rejected' : ''}`}
+                className={`rac-finding-row glass-panel ${selected?._id === f._id ? 'rac-finding-row--active' : ''} ${f.reviewStatus === 'rejected' ? 'rac-finding-row--rejected' : ''}`}
                 onClick={() => setSelected(selected?._id === f._id ? null : f)}
               >
                 <div className="rac-finding-left">
-                  <span className="rac-sev-badge" style={{ background: SEV_COLORS[f.severity] }}>{f.severity}</span>
+                  <span className="rac-sev-badge tabular-nums" style={{ background: SEV_COLORS[f.severity] }}>
+                    {f.severity}
+                  </span>
                   <div className="rac-finding-info">
                     <div className="rac-finding-title">{f.title}</div>
                     <div className="rac-finding-meta">
-                      <span className="rac-domain-tag" style={{ color: DOMAIN_COLORS[f.domain] || '#6366f1' }}>{f.domain}</span>
-                      {f.assignedTo && <span className="rac-assignee">👤 {f.assignedTo}</span>}
-                      {f.conditions?.length > 0 && <span className="rac-conditions">📌 {f.conditions.length}</span>}
+                      <span className="rac-domain-tag" style={{ color: DOMAIN_COLORS[f.domain] || 'var(--domain-commercial)' }}>
+                        {f.domain}
+                      </span>
+                      {f.assignedTo && (
+                        <span className="rac-assignee">
+                          <User size={11} />
+                          <span>{f.assignedTo}</span>
+                        </span>
+                      )}
+                      {f.conditions?.length > 0 && (
+                        <span className="rac-conditions tabular-nums">
+                          <Pin size={11} />
+                          <span>{f.conditions.length} Conditions</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

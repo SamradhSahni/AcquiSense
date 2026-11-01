@@ -1,98 +1,483 @@
-.nd { min-height: calc(100vh - var(--header-height)); display: flex; align-items: flex-start; justify-content: center; padding: var(--space-8); }
-.nd__container { width: 100%; max-width: 720px; }
-.nd__header { text-align: center; margin-bottom: var(--space-8); }
-.nd__title { font-size: 32px; font-weight: 800; margin-bottom: var(--space-2); }
-.nd__sub { color: var(--color-text-muted); font-size: 15px; }
+.nd {
+  min-height: calc(100vh - var(--header-height));
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8);
+}
 
-/* Steps indicator */
-.nd-steps { display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-8); gap: 0; }
-.nd-step { display: flex; align-items: center; gap: var(--space-2); }
-.nd-step__num {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--color-bg-elevated); border: 2px solid var(--color-bg-border);
-  color: var(--color-text-muted); font-size: 13px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
+.nd__container {
+  width: 100%;
+  max-width: 820px;
+}
+
+.nd__header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.nd__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
+  margin-bottom: 0.35rem;
+}
+
+.nd__sub {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  max-width: 520px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── Connected Laser Stepper ────────────────────────────────────────────────── */
+.nd-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-8);
+  padding: 0 var(--space-4);
+}
+
+.nd-step {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.nd-step__node {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
   transition: all var(--transition-base);
 }
-.nd-step--active .nd-step__num { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-muted); }
-.nd-step--done .nd-step__num { border-color: var(--color-p3); color: var(--color-p3); background: var(--color-p3-muted); }
-.nd-step__label { font-size: 13px; color: var(--color-text-muted); font-weight: 500; }
-.nd-step--active .nd-step__label { color: var(--color-text-primary); }
-.nd-step__line { flex: 1; height: 2px; background: var(--color-bg-border); width: 60px; margin: 0 var(--space-2); transition: background var(--transition-base); }
-.nd-step__line--done { background: var(--color-accent); }
 
-/* Card */
-.nd__card { background: var(--color-bg-surface); border: 1px solid var(--color-bg-border); border-radius: var(--radius-xl); padding: var(--space-8); }
-.nd__form { display: flex; flex-direction: column; gap: var(--space-5); }
-.nd__form-title { font-size: 20px; font-weight: 700; }
-.nd__field { display: flex; flex-direction: column; gap: var(--space-2); }
-.nd__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
-.nd__label { font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
-.nd__input {
-  background: var(--color-bg-elevated); border: 1px solid var(--color-bg-border);
-  color: var(--color-text-primary); padding: 10px 14px;
-  border-radius: var(--radius-md); font-size: 14px; font-family: var(--font-sans);
-  outline: none; transition: border-color var(--transition-fast);
+.nd-step--active .nd-step__node {
+  background: var(--ai-gradient-subtle);
+  border-color: var(--ai-primary);
+  color: var(--ai-primary);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
 }
-.nd__input:focus { border-color: var(--color-accent); }
 
-/* Model profiles */
-.nd__profiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+.nd-step--done .nd-step__node {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--risk-p3);
+  color: var(--risk-p3);
+}
+
+.nd-step__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  transition: color var(--transition-base);
+}
+
+.nd-step--active .nd-step__label {
+  color: var(--text-primary);
+}
+
+.nd-step--done .nd-step__label {
+  color: var(--text-secondary);
+}
+
+.nd-step__laser-track {
+  flex: 1;
+  height: 2px;
+  background: var(--border-default);
+  margin: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.nd-step__laser-fill {
+  height: 100%;
+  background: var(--ai-gradient);
+  transition: width 0.4s ease;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+/* ── Card & Form Container ──────────────────────────────────────────────────── */
+.nd__card {
+  padding: 2.25rem;
+}
+
+.nd__form-header {
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nd__form-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.nd__form-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.nd__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 1.25rem;
+}
+
+.nd__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.nd__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ── Model Profile Cards ────────────────────────────────────────────────────── */
+.nd__profiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+
 .nd__profile {
-  background: var(--color-bg-elevated); border: 2px solid var(--color-bg-border);
-  border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer;
-  transition: all var(--transition-fast);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
 }
-.nd__profile:hover { border-color: rgba(59,130,246,0.4); }
-.nd__profile--active { border-color: var(--color-accent); background: var(--color-accent-muted); }
-.nd__profile-label { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
-.nd__profile-desc { font-size: 11px; color: var(--color-text-muted); line-height: 1.4; }
 
-/* Dropzone */
+.nd__profile:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-strong);
+}
+
+.nd__profile--selected {
+  background: var(--ai-gradient-subtle) !important;
+  border-color: var(--ai-primary) !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.2) !important;
+}
+
+.nd__profile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.nd__profile-icon-well {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ai-primary);
+}
+
+.nd__profile-tag {
+  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+}
+
+.nd__profile-label {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.nd__profile-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ── Interactive Dropzone ───────────────────────────────────────────────────── */
 .nd__dropzone {
-  border: 2px dashed var(--color-bg-border); border-radius: var(--radius-lg);
-  padding: var(--space-10); text-align: center; cursor: pointer;
+  border: 1.5px dashed rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(7, 10, 16, 0.65);
   transition: all var(--transition-base);
+  margin-bottom: 1.25rem;
 }
-.nd__dropzone:hover, .nd__dropzone--active { border-color: var(--color-accent); background: var(--color-accent-muted); }
-.nd__dropzone-icon { font-size: 40px; margin-bottom: var(--space-3); }
-.nd__dropzone-text { font-size: 15px; font-weight: 600; margin-bottom: var(--space-2); }
-.nd__dropzone-hint { font-size: 12px; color: var(--color-text-muted); }
 
-/* File list */
-.nd__filelist { display: flex; flex-direction: column; gap: var(--space-2); max-height: 200px; overflow-y: auto; }
-.nd__file {
-  display: flex; align-items: center; gap: var(--space-3);
-  background: var(--color-bg-elevated); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px;
+.nd__dropzone:hover,
+.nd__dropzone--active {
+  border-color: var(--ai-primary);
+  background: rgba(56, 189, 248, 0.06);
+  transform: scale(1.01);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);
 }
-.nd__file-icon { flex-shrink: 0; }
-.nd__file-name { flex: 1; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nd__file-size { color: var(--color-text-muted); white-space: nowrap; }
-.nd__file-remove { color: var(--color-p0); font-size: 16px; cursor: pointer; background: none; border: none; }
 
-/* Upload progress */
-.nd__upload-progress { background: var(--color-bg-elevated); border-radius: var(--radius-sm); padding: 10px 14px; }
-.nd__upload-bar-track { height: 4px; background: var(--color-bg-primary); border-radius: var(--radius-full); overflow: hidden; margin-bottom: var(--space-2); }
-.nd__upload-bar { height: 4px; background: var(--color-accent); border-radius: var(--radius-full); transition: width 0.3s ease; }
-
-/* Launch step */
-.nd__form--launch { align-items: center; text-align: center; }
-.nd__launch-icon { font-size: 56px; margin-bottom: var(--space-3); }
-.nd__summary { width: 100%; background: var(--color-bg-elevated); border-radius: var(--radius-md); padding: var(--space-4); margin: var(--space-4) 0; }
-.nd__summary-row { display: flex; justify-content: space-between; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-bg-border); font-size: 14px; }
-.nd__summary-row:last-child { border-bottom: none; }
-.nd__summary-row span { color: var(--color-text-muted); }
-.nd__launch-desc { font-size: 14px; color: var(--color-text-secondary); line-height: 1.7; max-width: 440px; }
-
-/* Buttons */
-.nd__actions { display: flex; gap: var(--space-3); justify-content: space-between; margin-top: var(--space-2); }
-.nd__btn {
-  padding: 11px 24px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600;
-  cursor: pointer; transition: all var(--transition-fast); font-family: var(--font-sans);
+.nd__dropzone-icon-well {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--ai-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
 }
-.nd__btn--primary { background: var(--color-accent); color: #fff; border: none; }
-.nd__btn--primary:hover:not(:disabled) { background: var(--color-accent-hover); transform: translateY(-1px); }
-.nd__btn--primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.nd__btn--ghost { background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-bg-border); }
-.nd__btn--ghost:hover { border-color: var(--color-accent); color: var(--color-accent); }
-.nd__btn--lg { padding: 14px 32px; font-size: 16px; }
+
+.nd__dropzone-title {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.35rem;
+}
+
+.nd__dropzone-hint {
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
+
+/* ── Staged Files List ───────────────────────────────────────────────────────── */
+.nd__filelist {
+  background: rgba(7, 10, 16, 0.8);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  margin-bottom: 1.25rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.nd__filelist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.5rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0.5rem;
+}
+
+.nd__filelist-clear {
+  color: var(--ai-primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.nd__file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 0.35rem;
+  transition: background var(--transition-fast);
+}
+
+.nd__file-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nd-file-icon {
+  flex-shrink: 0;
+}
+
+.nd-file-icon--pdf { color: #F43F5E; }
+.nd-file-icon--sheet { color: #10B981; }
+.nd-file-icon--doc { color: #6366F1; }
+
+.nd__file-name {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+
+.nd__file-size {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.nd__file-remove {
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition-fast);
+}
+
+.nd__file-remove:hover {
+  color: var(--risk-p0);
+}
+
+/* ── Upload Telemetry Progress ───────────────────────────────────────────────── */
+.nd__upload-telemetry {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.nd__upload-telemetry-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ai-primary);
+  margin-bottom: 0.5rem;
+  font-family: var(--font-mono);
+}
+
+.nd__upload-track {
+  height: 6px;
+  background: var(--bg-obsidian);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.nd__upload-fill {
+  height: 100%;
+  background: var(--ai-gradient);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+
+/* ── Launch Pad ──────────────────────────────────────────────────────────────── */
+.nd__form--launch {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nd__launch-emblem {
+  width: 76px;
+  height: 76px;
+  border-radius: 22px;
+  background: var(--ai-gradient-subtle);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+  box-shadow: 0 0 32px rgba(56, 189, 248, 0.3);
+}
+
+.nd__launch-rocket {
+  color: var(--ai-primary);
+}
+
+.nd__manifest {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  margin: var(--space-6) 0;
+  text-align: left;
+}
+
+.nd__manifest-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+}
+
+.nd__manifest-row:last-child {
+  border-bottom: none;
+}
+
+.nd__manifest-key {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.nd__manifest-val {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.nd__manifest-val--secure {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--risk-p3);
+}
+
+/* ── Action Buttons ──────────────────────────────────────────────────────────── */
+.nd__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.nd__actions--right {
+  justify-content: flex-end;
+}
+
+.nd__actions--launch {
+  width: 100%;
+}
+
+.nd__launch-btn {
+  padding: 0.85rem 1.75rem;
+  border-radius: var(--radius-full);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .nd-stepper {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .nd-step__laser-track {
+    display: none;
+  }
+  .nd__row {
+    grid-template-columns: 1fr;
+  }
+  .nd__profiles {
+    grid-template-columns: 1fr;
+  }
+}

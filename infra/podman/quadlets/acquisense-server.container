@@ -1,0 +1,24 @@
+[Unit]
+Description=AcquiSense Node.js Express API Gateway
+PartOf=acquisense.pod
+After=acquisense-backend.service acquisense-mongodb.service acquisense-redis.service
+
+[Container]
+ContainerName=acquisense-server
+Pod=acquisense.pod
+Image=localhost/acquisense-server:latest
+Environment=NODE_ENV=production
+Environment=PORT=4000
+Environment=MONGO_URI=mongodb://ddadmin:ddpassword@127.0.0.1:27017/diligence?authSource=admin
+Environment=REDIS_URL=redis://:redispassword@127.0.0.1:6379/0
+Environment=PYTHON_BACKEND_URL=http://127.0.0.1:8000
+Environment=CLIENT_ORIGIN=http://localhost:5173
+EnvironmentFile=%h/acquisense/.env
+Volume=acquisense-uploads-data:/app/uploads:z
+HealthCmd=wget -qO- http://localhost:4000/health || exit 1
+HealthInterval=15s
+HealthRetries=5
+
+[Install]
+WantedBy=default.target
+

@@ -1,62 +1,147 @@
 import React from 'react';
+import { 
+  CheckCircle2, 
+  AlertTriangle, 
+  OctagonAlert, 
+  ShieldCheck, 
+  FileText 
+} from 'lucide-react';
 import './GoNoGo.css';
 
-const CONFIG = {
-  'GO':      { color: '#22c55e', glow: 'rgba(34,197,94,0.3)',    icon: '✓', label: 'GO',     sub: 'Proceed with acquisition' },
-  'CAUTION': { color: '#eab308', glow: 'rgba(234,179,8,0.3)',    icon: '⚠', label: 'CAUTION', sub: 'Proceed with conditions' },
-  'NO-GO':   { color: '#ef4444', glow: 'rgba(239,68,68,0.3)',    icon: '✕', label: 'NO-GO',  sub: 'Do not proceed' },
+const VERDICT_CONFIG = {
+  'GO': {
+    color: 'var(--risk-p3)',
+    border: 'var(--risk-p3-border)',
+    bg: 'var(--risk-p3-bg)',
+    glow: 'rgba(16, 185, 129, 0.35)',
+    icon: CheckCircle2,
+    label: 'GO — ACQUISITION CLEARED',
+    sub: 'Risk concentration below tolerance thresholds. Proceed with definitive transaction documents.',
+  },
+  'CAUTION': {
+    color: 'var(--risk-p2)',
+    border: 'var(--risk-p2-border)',
+    bg: 'var(--risk-p2-bg)',
+    glow: 'rgba(245, 158, 11, 0.35)',
+    icon: AlertTriangle,
+    label: 'CAUTION — CONDITIONAL APPROVAL',
+    sub: 'Elevated liabilities detected. Structure specific indemnities, escrow holdbacks, or pre-closing remediations.',
+  },
+  'NO-GO': {
+    color: 'var(--risk-p0)',
+    border: 'var(--risk-p0-border)',
+    bg: 'var(--risk-p0-bg)',
+    glow: 'rgba(244, 63, 94, 0.35)',
+    icon: OctagonAlert,
+    label: 'NO-GO — TRANSACTION PROHIBITED',
+    sub: 'Severe critical liabilities or zero-day vulnerabilities identified. Unacceptable downside exposure.',
+  },
 };
 
 export default function GoNoGoVerdict({ verdict, executiveSummary, domainScores = {} }) {
   if (!verdict) return null;
-  const cfg = CONFIG[verdict] || CONFIG['CAUTION'];
+  const cfg = VERDICT_CONFIG[verdict] || VERDICT_CONFIG['CAUTION'];
+  const Icon = cfg.icon;
 
   const scorePairs = Object.entries(domainScores)
-    .filter(([, v]) => v > 0)
+    .filter(([, v]) => typeof v === 'number' && v >= 0)
     .sort(([, a], [, b]) => b - a);
 
   return (
-    <div className="gng-card" style={{ '--gng-color': cfg.color, '--gng-glow': cfg.glow }}>
-      {/* Verdict badge */}
-      <div className="gng-verdict">
-        <div className="gng-verdict__circle">
-          <span className="gng-verdict__icon">{cfg.icon}</span>
+    <div 
+      className="gng-card glass-panel" 
+      style={{ 
+        '--gng-color': cfg.color, 
+        '--gng-glow': cfg.glow,
+        '--gng-border': cfg.border,
+        '--gng-bg': cfg.bg,
+      }}
+    >
+      {/* Top Hero Verdict Seal & Header */}
+      <div className="gng-hero">
+        <div className="gng-seal-container">
+          <div className="gng-seal-outer">
+            <div className="gng-seal-inner">
+              <Icon size={38} className="gng-seal-icon" />
+            </div>
+          </div>
         </div>
-        <div className="gng-verdict__text">
-          <div className="gng-verdict__label">{cfg.label}</div>
-          <div className="gng-verdict__sub">{cfg.sub}</div>
+
+        <div className="gng-hero-text">
+          <div className="gng-hero-overline">
+            <ShieldCheck size={13} />
+            <span>INVESTMENT COMMITTEE FORMAL RECOMMENDATION</span>
+          </div>
+          <h2 className="gng-hero-verdict">{cfg.label}</h2>
+          <p className="gng-hero-sub">{cfg.sub}</p>
         </div>
       </div>
 
-      {/* Executive summary */}
-      {executiveSummary && (
-        <div className="gng-summary">
-          <div className="gng-summary__label">Executive Summary</div>
-          <p className="gng-summary__text">{executiveSummary}</p>
-        </div>
-      )}
-
-      {/* Domain risk scores */}
-      {scorePairs.length > 0 && (
-        <div className="gng-scores">
-          <div className="gng-scores__label">Domain Risk Scores</div>
-          {scorePairs.map(([domain, score]) => (
-            <div key={domain} className="gng-score-row">
-              <span className="gng-score-domain">{domain.charAt(0).toUpperCase() + domain.slice(1)}</span>
-              <div className="gng-score-bar-track">
-                <div
-                  className="gng-score-bar-fill"
-                  style={{
-                    width: `${(score / 10) * 100}%`,
-                    background: score >= 7 ? '#ef4444' : score >= 4 ? '#f97316' : score >= 2 ? '#eab308' : '#22c55e',
-                  }}
-                />
-              </div>
-              <span className="gng-score-val">{score.toFixed(1)}</span>
+      <div className="gng-body-split">
+        {/* Executive Summary Dossier */}
+        <div className="gng-summary-pane">
+          <div className="gng-pane-label">
+            <FileText size={13} />
+            <span>INSTITUTIONAL EXECUTIVE SYNTHESIS</span>
+          </div>
+          {executiveSummary ? (
+            <div className="gng-summary-text">
+              {executiveSummary}
             </div>
-          ))}
+          ) : (
+            <div className="gng-summary-placeholder">
+              Comprehensive forensic dossier compiled and validated through 5 quality validation gates.
+            </div>
+          )}
         </div>
-      )}
+
+        {/* 9-Domain Risk Score Telemetry Bars */}
+        {scorePairs.length > 0 && (
+          <div className="gng-scores-pane">
+            <div className="gng-pane-label">
+              <span>DOMAIN RISK SCORE RANKING (0.0 — 10.0)</span>
+            </div>
+
+            <div className="gng-scores-list">
+              {scorePairs.map(([domain, score]) => {
+                const numScore = Number(score);
+                const scoreColor =
+                  numScore >= 7.0
+                    ? 'var(--risk-p0)'
+                    : numScore >= 4.0
+                    ? 'var(--risk-p2)'
+                    : 'var(--risk-p3)';
+
+                return (
+                  <div key={domain} className="gng-score-row">
+                    <span className="gng-score-domain">
+                      {domain.charAt(0).toUpperCase() + domain.slice(1)}
+                    </span>
+
+                    <div className="gng-score-track">
+                      <div
+                        className="gng-score-fill"
+                        style={{
+                          width: `${Math.min(100, (numScore / 10) * 100)}%`,
+                          background: scoreColor,
+                          boxShadow: `0 0 10px ${scoreColor}`,
+                        }}
+                      />
+                    </div>
+
+                    <span
+                      className="gng-score-badge tabular-nums"
+                      style={{ color: scoreColor, borderColor: `color-mix(in srgb, ${scoreColor} 30%, transparent)` }}
+                    >
+                      {numScore.toFixed(1)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

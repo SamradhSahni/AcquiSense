@@ -1,86 +1,185 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   Due Diligence Agents — Global Design System
-   Phase 1: tokens + reset + base styles
-   Phase 4: components added progressively
+   AcquiSense — Obsidian Sovereign Design System
+   Palantir Foundry × Linear × Bloomberg Institutional Terminal
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  /* Colors — dark professional palette */
-  --color-bg-primary: #0a0d14;
-  --color-bg-secondary: #111827;
-  --color-bg-surface: #1a2236;
-  --color-bg-elevated: #1f2d45;
-  --color-bg-border: rgba(255, 255, 255, 0.08);
+  /* =========================================================================
+     1. OBSIDIAN CANVAS & ELEVATION HIERARCHY (Depth-Layered Dark Surfaces)
+     ========================================================================= */
+  --bg-canvas: #030508;                     /* Abyssal obsidian base canvas */
+  --bg-obsidian: #070A10;                   /* Secondary structural shell / nav */
+  --bg-surface-1: #0B101B;                  /* Base card & panel surface */
+  --bg-surface-2: #111827;                  /* Raised interactive surface / hover */
+  --bg-surface-3: #1A2336;                  /* Floating popovers, dropdowns & tooltips */
 
-  /* Brand accent — electric blue */
-  --color-accent: #3b82f6;
-  --color-accent-hover: #60a5fa;
-  --color-accent-muted: rgba(59, 130, 246, 0.15);
+  /* Refractive Glassmorphism Layers */
+  --glass-surface-thin: rgba(11, 16, 27, 0.55);
+  --glass-surface-medium: rgba(14, 20, 34, 0.72);
+  --glass-surface-heavy: rgba(9, 13, 22, 0.88);
+  --glass-surface-elevated: rgba(23, 32, 53, 0.65);
 
-  /* Severity palette */
-  --color-p0: #ef4444;        /* Critical — red */
-  --color-p1: #f97316;        /* High — orange */
-  --color-p2: #eab308;        /* Medium — amber */
-  --color-p3: #22c55e;        /* Low — green */
-  --color-p0-muted: rgba(239, 68, 68, 0.15);
-  --color-p1-muted: rgba(249, 115, 22, 0.15);
-  --color-p2-muted: rgba(234, 179, 8, 0.15);
-  --color-p3-muted: rgba(34, 197, 94, 0.15);
+  /* Backdrop Blur & Saturation Filters */
+  --blur-sm: blur(10px) saturate(150%);
+  --blur-md: blur(20px) saturate(180%);
+  --blur-lg: blur(32px) saturate(200%);
 
-  /* Verdict */
-  --color-go: #22c55e;
-  --color-caution: #eab308;
-  --color-no-go: #ef4444;
+  /* Specular Borders & Inner Hairlines */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-specular-top: rgba(255, 255, 255, 0.22); /* Top edge light catch */
+  --border-focus: rgba(56, 189, 248, 0.55);
 
-  /* Text */
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-  --color-text-inverse: #0a0d14;
+  /* =========================================================================
+     2. BRAND & AI TELEMETRY ACCENTS
+     ========================================================================= */
+  /* Institutional Sovereign Accent (Titanium & Champagne Gold) */
+  --brand-primary: #F8FAFC;
+  --brand-gold: #F59E0B;
+  --brand-gold-soft: rgba(245, 158, 11, 0.14);
 
-  /* Typography */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  /* AI Engine & Telemetry Accent (Electric Cobalt -> Cyan Gradient) */
+  --ai-primary: #38BDF8;                    /* Electric Sky Cyan */
+  --ai-secondary: #6366F1;                  /* Deep Neural Indigo */
+  --ai-tertiary: #A855F7;                   /* Quantum Violet */
+  --ai-gradient: linear-gradient(135deg, #38BDF8 0%, #6366F1 55%, #A855F7 100%);
+  --ai-gradient-subtle: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+  --ai-glow: 0 0 24px rgba(56, 189, 248, 0.28), 0 0 8px rgba(99, 102, 241, 0.4);
+
+  /* =========================================================================
+     3. WCAG AAA/AA HIGH-CONTRAST TYPOGRAPHY TOKENS
+     ========================================================================= */
+  --text-primary: #F8FAFC;                  /* Crisp Alabaster White (19.2:1 contrast) */
+  --text-secondary: #CBD5E1;                /* Cool Platinum Slate (13.4:1 contrast) */
+  --text-tertiary: #94A3B8;                 /* Muted Architectural Slate (7.3:1 AAA contrast) */
+  --text-muted: #64748B;                    /* Secondary Meta / Disabled (4.6:1 AA contrast) */
+  --text-inverse: #030508;
+
+  /* =========================================================================
+     4. FORENSIC SEVERITY PALETTE (P0 – P3) & VERDICT TOKENS
+     ========================================================================= */
+  /* P0 — Critical / Deal-Breaker / NO-GO */
+  --risk-p0: #F43F5E;                       /* Crimson Rose Neon */
+  --risk-p0-bg: rgba(244, 63, 94, 0.14);
+  --risk-p0-border: rgba(244, 63, 94, 0.38);
+  --risk-p0-glow: 0 0 20px rgba(244, 63, 94, 0.35);
+
+  /* P1 — High Material Risk */
+  --risk-p1: #FB923C;                       /* Solar Amber-Orange */
+  --risk-p1-bg: rgba(251, 146, 60, 0.14);
+  --risk-p1-border: rgba(251, 146, 60, 0.38);
+  --risk-p1-glow: 0 0 20px rgba(251, 146, 60, 0.30);
+
+  /* P2 — Medium Risk / CAUTION */
+  --risk-p2: #FACC15;                       /* Citrine Signal Yellow */
+  --risk-p2-bg: rgba(250, 204, 21, 0.14);
+  --risk-p2-border: rgba(250, 204, 21, 0.38);
+  --risk-p2-glow: 0 0 20px rgba(250, 204, 21, 0.28);
+
+  /* P3 — Low Risk / Clean / GO Verdict */
+  --risk-p3: #10B981;                       /* Emerald Mint Neon */
+  --risk-p3-bg: rgba(16, 185, 129, 0.14);
+  --risk-p3-border: rgba(16, 185, 129, 0.38);
+  --risk-p3-glow: 0 0 20px rgba(16, 185, 129, 0.32);
+
+  /* Muted variant aliases */
+  --color-p0-muted: var(--risk-p0-bg);
+  --color-p1-muted: var(--risk-p1-bg);
+  --color-p2-muted: var(--risk-p2-bg);
+  --color-p3-muted: var(--risk-p3-bg);
+
+  /* =========================================================================
+     5. 9 DILIGENCE DOMAIN SIGNATURE ACCENTS
+     ========================================================================= */
+  --domain-legal: #818CF8;                  /* Indigo */
+  --domain-finance: #34D399;                /* Emerald */
+  --domain-commercial: #38BDF8;             /* Sky Cyan */
+  --domain-tech: #A78BFA;                   /* Violet */
+  --domain-cyber: #FB7185;                  /* Coral Crimson */
+  --domain-hr: #F472B6;                     /* Magenta Rose */
+  --domain-tax: #FBBF24;                    /* Warm Amber */
+  --domain-regulatory: #2DD4BF;             /* Teal */
+  --domain-esg: #4ADE80;                    /* Mint Green */
+
+  /* =========================================================================
+     6. BACKWARD-COMPATIBLE ALIASES (Fixes Audit Section 6.1 Broken Vars)
+     ========================================================================= */
+  --color-bg-primary: var(--bg-canvas);
+  --color-bg-secondary: var(--bg-obsidian);
+  --color-bg-surface: var(--bg-surface-1);
+  --color-bg-elevated: var(--bg-surface-2);
+  --color-bg-muted: rgba(255, 255, 255, 0.04);
+  --color-bg: var(--bg-surface-1);
+  --color-bg-border: var(--border-default);
+
+  --color-accent: var(--ai-primary);
+  --color-accent-hover: #7DD3FC;
+  --color-accent-muted: rgba(56, 189, 248, 0.14);
+  --color-accent-dim: rgba(56, 189, 248, 0.07);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-muted: var(--text-muted);
+
+  --color-p0: var(--risk-p0);
+  --color-p1: var(--risk-p1);
+  --color-p2: var(--risk-p2);
+  --color-p3: var(--risk-p3);
 
   /* Spacing */
+  --space-0: 0px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
 
-  /* Border radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* =========================================================================
+     7. TYPOGRAPHY, SPACING & ELEVATION SHADOWS
+     ========================================================================= */
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --header-height: 68px;
+  --max-content-width: 1600px;
+  --sidebar-width: 260px;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
-  --shadow-glow-accent: 0 0 24px rgba(59, 130, 246, 0.3);
-  --shadow-glow-p0: 0 0 16px rgba(239, 68, 68, 0.3);
+  --transition-fast: 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-base: 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 320ms cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 400ms ease;
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.65);
+  --shadow-5: 0 16px 48px rgba(0, 0, 0, 0.7);
+  --shadow-accent: 0 0 18px rgba(56, 189, 248, 0.25);
+  --shadow-accent-hover: 0 0 24px rgba(56, 189, 248, 0.4);
 
-  /* Layout */
-  --sidebar-width: 240px;
-  --header-height: 60px;
-  --max-content-width: 1400px;
+  --shadow-glass: 0 16px 40px -8px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 var(--border-specular-top);
+  --shadow-glass-hover: 0 24px 48px -12px rgba(0, 0, 0, 0.8), 0 0 24px -4px rgba(56, 189, 248, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.35);
 }
 
-/* ── CSS Reset ─────────────────────────────────────────────────────────────── */
+/* ── Reset & Body ───────────────────────────────────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -93,16 +192,24 @@ html {
   font-size: 16px;
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
+/* Ambient Mesh Background for Body */
 body {
+  background-color: var(--bg-canvas);
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(56, 189, 248, 0.07) 0%, transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(99, 102, 241, 0.07) 0%, transparent 45%),
+    radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text-primary);
   font-family: var(--font-sans);
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -111,8 +218,7 @@ body {
   flex-direction: column;
 }
 
-img,
-video {
+img, video {
   max-width: 100%;
   display: block;
 }
@@ -122,45 +228,228 @@ button {
   font-family: inherit;
   border: none;
   background: none;
+  touch-action: manipulation;
 }
 
 a {
-  color: var(--color-accent);
+  color: var(--ai-primary);
   text-decoration: none;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-base);
 }
 
 a:hover {
   color: var(--color-accent-hover);
 }
 
-code,
-pre {
+code, pre {
   font-family: var(--font-mono);
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+/* ── Refractive Glassmorphism Surfaces ───────────────────────────────────────── */
+/* Primary Refractive Glass Card */
+.glass-panel {
+  background: var(--glass-surface-medium);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.28s ease,
+              box-shadow 0.28s ease;
+}
+
+/* Interactive Spotlight Hover Effect */
+.glass-panel--interactive {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.28s ease,
+              box-shadow 0.28s ease;
+}
+
+.glass-panel--interactive:hover {
+  transform: translateY(-3px);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: var(--shadow-glass-hover);
+}
+
+.glass-panel--interactive::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    500px circle at var(--mouse-x, 50%) var(--mouse-y, 0%),
+    rgba(56, 189, 248, 0.09),
+    transparent 40%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.glass-panel--interactive:hover::before {
+  opacity: 1;
+}
+
+/* Forensic Tabular Numbers for Financial & Risk Metrics */
+.tabular-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Unified Glass Input & Select Controls */
+.glass-input {
+  width: 100%;
+  background: rgba(7, 10, 16, 0.75);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  transition: all 0.2s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: var(--ai-primary);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18), inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.glass-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Interactive Buttons ────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  font-size: 0.9375rem;
+  padding: 0.65rem 1.25rem;
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary {
+  background: var(--ai-gradient);
+  color: #FFFFFF;
+  box-shadow: 0 4px 18px rgba(56, 189, 248, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(56, 189, 248, 0.45);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-outline {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-strong);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+/* ── Badges ─────────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+}
+
+.badge-p0 {
+  background: var(--risk-p0-bg);
+  color: var(--risk-p0);
+  border-color: var(--risk-p0-border);
+}
+
+.badge-p1 {
+  background: var(--risk-p1-bg);
+  color: var(--risk-p1);
+  border-color: var(--risk-p1-border);
+}
+
+.badge-p2 {
+  background: var(--risk-p2-bg);
+  color: var(--risk-p2);
+  border-color: var(--risk-p2-border);
+}
+
+.badge-p3 {
+  background: var(--risk-p3-bg);
+  color: var(--risk-p3);
+  border-color: var(--risk-p3-border);
+}
+
+/* ── Scrollbars ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-secondary);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-bg-elevated);
-  border-radius: var(--radius-full);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: var(--bg-obsidian);
 }
 
-/* ── Loading spinner ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ai-primary);
+}
+
+/* ── Spinner ────────────────────────────────────────────────────────────────── */
 .spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--color-bg-elevated);
-  border-top-color: var(--color-accent);
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(56, 189, 248, 0.15);
+  border-top-color: var(--ai-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -169,36 +458,27 @@ pre {
   to { transform: rotate(360deg); }
 }
 
-/* ── Utility classes ───────────────────────────────────────────────────────── */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+.spin {
+  animation: spin 1s linear infinite;
 }
 
-.text-muted { color: var(--color-text-muted); }
-.text-secondary { color: var(--color-text-secondary); }
-.font-mono { font-family: var(--font-mono); }
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+/* ── Pulse Animation ────────────────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
 }
 
-.badge-p0 { background: var(--color-p0-muted); color: var(--color-p0); }
-.badge-p1 { background: var(--color-p1-muted); color: var(--color-p1); }
-.badge-p2 { background: var(--color-p2-muted); color: var(--color-p2); }
-.badge-p3 { background: var(--color-p3-muted); color: var(--color-p3); }
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ai-primary);
+  animation: pulse 1.4s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* ── Focus rings ────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ai-primary);
+  outline-offset: 2px;
+}

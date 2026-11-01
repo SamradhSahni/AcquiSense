@@ -1,52 +1,282 @@
-.crossref-graph {
-  position: relative;
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+.crossref-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
-.crossref-graph svg { display: block; width: 100%; }
+
+.crossref-graph {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  overflow: hidden;
+  position: relative;
+}
+
+.crossref-graph__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: rgba(11, 16, 27, 0.7);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.crossref-graph__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+}
+
+.crossref-graph__title svg {
+  color: var(--ai-primary);
+}
+
+.crossref-graph__counter {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--ai-primary);
+  font-weight: 600;
+}
+
+/* Radar Coordinate Viewport */
+.crossref-graph__viewport {
+  width: 100%;
+  background: 
+    radial-gradient(circle at center, rgba(56, 189, 248, 0.03) 0%, transparent 70%),
+    radial-gradient(circle at center, transparent 40px, rgba(255, 255, 255, 0.02) 41px, transparent 42px),
+    radial-gradient(circle at center, transparent 110px, rgba(255, 255, 255, 0.02) 111px, transparent 112px),
+    radial-gradient(circle at center, transparent 180px, rgba(255, 255, 255, 0.02) 181px, transparent 182px),
+    rgba(3, 5, 8, 0.6);
+  min-height: 420px;
+  position: relative;
+}
+
+.crossref-graph__viewport svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* HUD Glassmorphic Tooltip */
 .crossref-tooltip {
   position: absolute;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-bg-border);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--color-text-primary);
+  background: var(--glass-surface-heavy);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-primary);
   pointer-events: none;
-  max-width: 200px;
-  box-shadow: var(--shadow-md);
-  z-index: 10;
+  max-width: 240px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  z-index: 50;
 }
-.crossref-tooltip strong { display: block; margin-bottom: 2px; }
-.crossref-tooltip span { color: var(--color-text-muted); }
+
+.crossref-tooltip__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.crossref-tooltip__domain {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--ai-primary);
+  font-weight: 700;
+}
+
+.crossref-tooltip__sev {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--risk-p0);
+}
+
+.crossref-tooltip__title {
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  margin-bottom: 0.35rem;
+}
+
+.crossref-tooltip__id {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+}
+
+/* Legend */
 .crossref-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-bg-border);
+  gap: 1rem;
+  padding: 0.875rem 1.5rem;
+  background: rgba(7, 10, 16, 0.8);
+  border-top: 1px solid var(--border-default);
 }
+
 .crossref-legend__item {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--color-text-muted);
+  gap: 0.4rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
 }
+
 .crossref-legend__dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
 }
+
+/* Empty State */
 .crossref-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-10);
-  gap: var(--space-3);
-  color: var(--color-text-muted);
-  font-size: 14px;
+  padding: 4rem 2rem;
+  text-align: center;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
 }
-.crossref-empty__icon { font-size: 36px; }
+
+.crossref-empty__icon-well {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  margin-bottom: 1rem;
+}
+
+.crossref-empty h3 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.crossref-empty p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  max-width: 440px;
+}
+
+/* Compound Liability Cards Section */
+.crossref-cards-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.crossref-cards-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--risk-p1);
+}
+
+.crossref-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .crossref-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crossref-card {
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.crossref-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.crossref-card__domains {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.crossref-domain-pill {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.crossref-card__arrow {
+  color: var(--ai-primary);
+}
+
+.crossref-card__sev-pill {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.crossref-card__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.crossref-card__finding-title {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.crossref-title-bullet {
+  color: var(--ai-primary);
+}
+
+.crossref-card__narrative {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: rgba(7, 10, 16, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--ai-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin: 0;
+}

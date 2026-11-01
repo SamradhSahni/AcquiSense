@@ -1,0 +1,210 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  AcquiSense — Podman Kubernetes Manifest
+#  Deploy natively with Podman without requiring Compose:
+#    podman play kube podman-k8s.yaml
+#  Tear down:
+#    podman play kube --down podman-k8s.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Pod
+metadata:
+  name: acquisense-pod
+  labels:
+    app: acquisense
+spec:
+  restartPolicy: Always
+  volumes:
+    - name: mongodb-data
+      persistentVolumeClaim:
+        claimName: acquisense-mongodb-pvc
+    - name: redis-data
+      persistentVolumeClaim:
+        claimName: acquisense-redis-pvc
+    - name: uploads-data
+      persistentVolumeClaim:
+        claimName: acquisense-uploads-pvc
+    - name: grafana-data
+      persistentVolumeClaim:
+        claimName: acquisense-grafana-pvc
+    - name: prometheus-data
+      persistentVolumeClaim:
+        claimName: acquisense-prometheus-pvc
+
+  containers:
+    # ── 1. MongoDB ──────────────────────────────────────────────────────────
+    - name: mongodb
+      image: docker.io/library/mongo:7
+      env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: "ddadmin"
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          value: "ddpassword"
+        - name: MONGO_INITDB_DATABASE
+          value: "diligence"
+      ports:
+        - containerPort: 27017
+          hostPort: 27117
+      volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+
+    # ── 2. Redis ────────────────────────────────────────────────────────────
+    - name: redis
+      image: docker.io/library/redis:7-alpine
+      command: ["redis-server", "--requirepass", "redispassword", "--appendonly", "yes"]
+      ports:
+        - containerPort: 6379
+          hostPort: 6479
+      volumeMounts:
+        - name: redis-data
+          mountPath: /data
+
+    # ── 3. Python FastAPI AI Engine ─────────────────────────────────────────
+    - name: backend
+      image: localhost/acquisense-backend:latest
+      env:
+        - name: OPENAI_API_KEY
+          value: "" # Set via environment or secret
+        - name: OPENAI_BASE_URL
+          value: "https://api.aicredits.in/v1"
+        - name: MONGO_URI
+          value: "mongodb://ddadmin:ddpassword@127.0.0.1:27017/diligence?authSource=admin"
+        - name: REDIS_URL
+          value: "redis://:redispassword@127.0.0.1:6379/0"
+        - name: UPLOAD_DIR
+          value: "/app/uploads"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+      ports:
+        - containerPort: 8000
+          hostPort: 8100
+      volumeMounts:
+        - name: uploads-data
+          mountPath: /app/uploads
+
+    # ── 4. Node.js Express API Gateway ─────────────────────────────────────
+    - name: server
+      image: localhost/acquisense-server:latest
+      env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "4000"
+        - name: MONGO_URI
+          value: "mongodb://ddadmin:ddpassword@127.0.0.1:27017/diligence?authSource=admin"
+        - name: REDIS_URL
+          value: "redis://:redispassword@127.0.0.1:6379/0"
+        - name: PYTHON_BACKEND_URL
+          value: "http://127.0.0.1:8000"
+        - name: CLIENT_ORIGIN
+          value: "http://localhost:5173"
+        - name: JWT_SECRET
+          value: "acquise-jwt-secret-change-in-production"
+      ports:
+        - containerPort: 4000
+          hostPort: 4100
+      volumeMounts:
+        - name: uploads-data
+          mountPath: /app/uploads
+
+    # ── 5. React Web Client ────────────────────────────────────────────────
+    - name: client
+      image: localhost/acquisense-client:latest
+      ports:
+        - containerPort: 3000
+          hostPort: 5173
+
+    # ── 6. Prometheus ──────────────────────────────────────────────────────
+    - name: prometheus
+      image: docker.io/prom/prometheus:v2.51.0
+      command:
+        - "--config.file=/etc/prometheus/prometheus.yml"
+        - "--storage.tsdb.path=/prometheus"
+        - "--storage.tsdb.retention.time=15d"
+      ports:
+        - containerPort: 9090
+          hostPort: 9190
+      volumeMounts:
+        - name: prometheus-data
+          mountPath: /prometheus
+
+    # ── 7. Grafana ─────────────────────────────────────────────────────────
+    - name: grafana
+      image: docker.io/grafana/grafana:10.4.0
+      env:
+        - name: GF_SECURITY_ADMIN_USER
+          value: "admin"
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "grafanapassword"
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_SERVER_HTTP_PORT
+          value: "3001"
+      ports:
+        - containerPort: 3001
+          hostPort: 3200
+      volumeMounts:
+        - name: grafana-data
+          mountPath: /var/lib/grafana
+
+---
+# ── Persistent Volume Claims ───────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acquisense-mongodb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acquisense-redis-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acquisense-uploads-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acquisense-grafana-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acquisense-prometheus-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+

@@ -1,0 +1,20 @@
+[Unit]
+Description=AcquiSense MongoDB 7 Database
+PartOf=acquisense.pod
+After=acquisense.pod
+
+[Container]
+ContainerName=acquisense-mongodb
+Pod=acquisense.pod
+Image=docker.io/library/mongo:7
+Environment=MONGO_INITDB_ROOT_USERNAME=ddadmin
+Environment=MONGO_INITDB_ROOT_PASSWORD=ddpassword
+Environment=MONGO_INITDB_DATABASE=diligence
+Volume=acquisense-mongodb-data:/data/db:z
+HealthCmd=mongosh --quiet --eval "db.adminCommand('ping')"
+HealthInterval=15s
+HealthRetries=5
+
+[Install]
+WantedBy=default.target
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=AcquiSense React Web Client
+PartOf=acquisense.pod
+After=acquisense-server.service
+
+[Container]
+ContainerName=acquisense-client
+Pod=acquisense.pod
+Image=localhost/acquisense-client:latest
+
+[Install]
+WantedBy=default.target
+
