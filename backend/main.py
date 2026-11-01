@@ -16,6 +16,7 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from api.routes import router
+from api.mobile_copilot import router as mobile_copilot_router
 from monitoring.metrics import (
     PIPELINE_JOBS_TOTAL,
     AGENT_ANALYSIS_DURATION,
@@ -72,6 +73,7 @@ app.add_middleware(
 
 # Include all API routes
 app.include_router(router)
+app.include_router(mobile_copilot_router)
 
 
 @app.get("/health", tags=["Infrastructure"])

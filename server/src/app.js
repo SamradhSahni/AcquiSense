@@ -79,9 +79,11 @@ app.use((req, res, next) => {
 app.use('/api/python', require('./routes/pythonProxyRoutes'));
 
 // Authentication routes (public)
+app.use('/api/auth/mobile', require('./routes/mobileAuthRoutes'));
 app.use('/api/auth', authRouter);
 
 // Protected routes - require authentication
+app.use('/api/mobile',   authenticateToken, require('./routes/mobileSyncRoutes'));
 app.use('/api/deals',    authenticateToken, require('./routes/dealRoutes'));
 app.use('/api/upload',   authenticateToken, require('./routes/uploadRoutes'));
 app.use('/api/jobs',     authenticateToken, require('./routes/jobRoutes'));
@@ -159,17 +161,23 @@ const { connectDB } = require('./config/db');
   const worker = startWorker(io);
   createQueueEvents();
 
+  // Start mobile push stream consumer worker
+  const { startFcmPushWorker, stopFcmPushWorker } = require('./workers/fcmPushWorker');
+  startFcmPushWorker().catch((e) => console.warn('[FCM Worker startup notice]:', e.message));
+
   server.listen(PORT, () => {
     console.log(`🚀 DD Server running on port ${PORT}`);
     console.log(`   WebSocket:  ws://localhost:${PORT}`);
     console.log(`   Health:     http://localhost:${PORT}/health`);
     console.log(`   Metrics:    http://localhost:${PORT}/metrics`);
     console.log(`   Queue:      http://localhost:${PORT}/api/jobs/queue/health`);
+    console.log(`   Mobile API: http://localhost:${PORT}/api/mobile`);
   });
 
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     console.log('🛑 SIGTERM received — shutting down gracefully');
+    stopFcmPushWorker();
     await worker.close();
     server.close(() => process.exit(0));
   });

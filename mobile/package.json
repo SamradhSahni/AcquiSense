@@ -1,0 +1,49 @@
+{
+  "name": "acquisense-mobile",
+  "main": "expo-router/entry",
+  "version": "3.0.0",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@shopify/flash-list": "1.7.3",
+    "@shopify/react-native-skia": "1.5.0",
+    "@tanstack/react-query": "^5.66.0",
+    "@types/d3-force": "^3.0.10",
+    "axios": "^1.7.9",
+    "d3-force": "^3.0.0",
+    "drizzle-orm": "^0.39.3",
+    "expo": "~52.0.0",
+    "expo-av": "~15.0.2",
+    "expo-constants": "~17.0.7",
+    "expo-crypto": "~14.0.2",
+    "expo-file-system": "~18.0.11",
+    "expo-linking": "~7.0.5",
+    "expo-local-authentication": "~15.0.2",
+    "expo-router": "~4.0.17",
+    "expo-secure-store": "~14.0.1",
+    "expo-sqlite": "~15.1.2",
+    "expo-status-bar": "~2.0.1",
+    "lucide-react-native": "^0.475.0",
+    "nativewind": "^4.1.23",
+    "react": "18.3.1",
+    "react-native": "0.76.7",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-mmkv": "^3.1.0",
+    "react-native-reanimated": "~3.16.1",
+    "react-native-safe-area-context": "5.0.0",
+    "react-native-screens": "~4.4.0",
+    "socket.io-client": "^4.8.1",
+    "tailwindcss": "^3.4.17",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~18.3.12",
+    "typescript": "^5.3.3"
+  },
+  "private": true
+}

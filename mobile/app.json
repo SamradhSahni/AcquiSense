@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "AcquiSense Mobile",
+    "slug": "acquisense-mobile",
+    "version": "3.0.0",
+    "scheme": "acquisense",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#07090E",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "package": "com.acquisense.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#07090E"
+      },
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow AcquiSense to unlock confidential M&A dossiers."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow AcquiSense Pocket Copilot to transcribe your voice questions."
+        }
+      ]
+    ]
+  }
+}

@@ -169,4 +169,6 @@ const GroupSchema = new mongoose.Schema({
 GroupSchema.index({ name: 1, company: 1 }, { unique: true });
 const Group = mongoose.model('Group', GroupSchema);
 
-module.exports = { Deal, Job, Report, Finding, Company, User, Group };
+const MobileDevice = require('./MobileDevice');
+
+module.exports = { Deal, Job, Report, Finding, Company, User, Group, MobileDevice };

@@ -170,26 +170,54 @@ Four dashboards auto-provision on first start at **http://localhost:3200**:
 
 ```
 AcquiSense/
-├── backend/              # Python FastAPI — AI engine
-│   ├── agents/           # 13 specialist + orchestration agents
-│   ├── utils/            # File parsing, schema, pipeline
+├── backend/              # Python FastAPI — AI engine (13 specialist agents + mobile copilot SSE)
+│   ├── agents/           # Specialist & orchestration agents
+│   ├── api/              # Routes, schemas, mobile_copilot.py
 │   ├── main.py           # FastAPI app entry
 │   └── requirements.txt
-├── server/               # Node.js Express — API gateway
+├── server/               # Node.js Express — API gateway & synchronization
 │   └── src/
-│       ├── routes/       # deals, uploads, jobs, reports
-│       ├── models/       # MongoDB schemas
-│       ├── services/     # Python bridge, Redis subscriber
+│       ├── routes/       # deals, uploads, jobs, mobileSyncRoutes, mobileAuthRoutes
+│       ├── models/       # MongoDB schemas (Deal, Finding, User, MobileDevice)
+│       ├── workers/      # fcmPushWorker (Redis Stream deduplication)
 │       └── app.js
-├── client/               # React + Vite — dashboard
-│   └── src/
-│       ├── components/   # AgentGrid, RiskHeatmap, FindingsTable, GoNoGo, CrossRefGraph
-│       ├── pages/        # LandingPage, Dashboard, NewDeal, DealView, Reports
-│       └── services/     # api.js (Axios), socket.js (Socket.IO)
+├── client/               # React + Vite — Web dashboard
+│   ├── src/components/   # AgentGrid, RiskHeatmap, FindingsTable, GoNoGo
+│   └── src/pages/        # Dashboard, DealView, Reports, ActionCenter
+├── mobile/               # React Native / Expo SDK 52 — Zero-Trust Android Client
+│   ├── app/              # Expo Router routes (biometrics, tabs, deals, dossier)
+│   ├── src/db/           # SQLCipher AES-256 + FTS5 Porter BM25 engine & coalescing outbox
+│   ├── src/services/     # Lazy Keystore bootstrap, token refresh mutex, multipart uploader
+│   ├── src/components/   # SkiaForceGraph, PocketCopilot, CitationsBottomSheet
+│   └── src/hooks/        # useResumableCopilot (SSE with 401 recovery & voice mic)
 ├── grafana/              # Grafana dashboards + provisioning
 ├── prometheus/           # Prometheus scrape config
-├── infra/mongo/          # MongoDB init script
-└── docker-compose.yml    # Full stack orchestration
+├── infra/podman/         # Quadlet unit systemd configurations
+├── scripts/              # Podman & Docker cross-platform startup automation
+└── podman-compose.yml    # Rootless Podman compose deployment
+```
+
+---
+
+## 📱 AcquiSense Android Mobile App (v3.0 Zero-Trust)
+
+AcquiSense Mobile brings institutional-grade M&A diligence into the hands of Private Equity partners and corporate development leads on Android.
+
+### 🛡️ Enterprise Zero-Trust Architecture
+1. **Hardware Keystore & SQLCipher AES-256**: All offline target findings, deal metrics, and FTS5 full-text search indexes are encrypted at rest with 256-bit keys provisioned via `Android Keystore` (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`). Lazy singleton bootstrap prevents background crash on locked FCM wake.
+2. **Coalescing Atomic Outbox**: Sequential offline edits (verdicts, conditions, workflow status) are coalesced locally preserving `baseVersion` and flushed atomically via MongoDB compare-and-swap (`__v == baseVersion`), preventing self-inflicted OCC conflicts.
+3. **Decoupled Resumable Pocket Copilot**: SSE stream decoupled from the LLM generator via Redis Streams (`XREAD`). Seamlessly recovers interrupted connections via `Last-Event-ID` and single-flight 401 refresh mutex.
+4. **Hold-to-Talk Voice Queries**: Instant Whisper-1 transcription primed with institutional M&A terms (EBITDA, QoE, P0, indemnification caps).
+5. **Forensic PDF Watermarking**: Real-time server-side `pdf-lib` stream burns analyst email, IP address, and UTC timestamp diagonally across confidential target contracts.
+6. **Remote MNPI Kill-Switch**: High-priority silent FCM push and 403 wipe interceptor cryptographically shreds local SQLCipher database and keystore keys on lost or revoked devices.
+
+### 🏃 Running the Mobile App
+
+```bash
+cd mobile
+npm install
+npx expo start
+# Press 'a' to open on Android Emulator or scan QR code via Expo Go / Development Build
 ```
 
 ---

@@ -1180,4 +1180,104 @@ podman play kube podman-k8s.yaml
 - [x] **Command Palette**: `Cmd+K` / `Ctrl+K` keyboard-driven navigation.
 - [x] **Cryptographic Verification**: Canonical SHA-256 tamper-evident report hashing.
 - [x] **Observability**: Prometheus metrics, OpenTelemetry distributed tracing, and Grafana dashboards.
+- [x] **Zero-Trust Mobile Android App**: SQLCipher AES-256, Android Keystore, Coalescing Outbox, Decoupled Copilot SSE, and Remote Kill-Switch.
+
+---
+
+## 14. AcquiSense Mobile — Zero-Trust Android Client Architecture (v3.0)
+
+### 14.1 Technical Overview & Security Posture
+The AcquiSense Mobile Android application (`/mobile`) is built on **React Native / Expo SDK 52** with the **New Architecture** enabled. It provides Private Equity investment committees and deal teams with an offline-first, tamper-resistant mobile console for reviewing multi-million dollar acquisitions.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        ACQUISENSE ANDROID CLIENT                      │
+│                                                                        │
+│   ┌────────────────────┐   ┌───────────────────┐   ┌───────────────┐   │
+│   │   Expo Router      │   │   Zustand Stores  │   │ FlashList UI  │   │
+│   │   (File-based)     │   │ (Auth & Deals)    │   │ & Skia Graph  │   │
+│   └─────────┬──────────┘   └─────────┬─────────┘   └───────┬───────┘   │
+│             │                        │                     │           │
+│             ▼                        ▼                     ▼           │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │     SQLCipher AES-256 Vault + SQLite FTS5 (BM25 Offline Search)│   │
+│   │         Key: 256-bit Hex Key from Android Keystore             │   │
+│   └────────────────────────────────┬───────────────────────────────┘   │
+│                                    │                                   │
+│   ┌────────────────────────────────┴───────────────────────────────┐   │
+│   │     Coalescing Transactional Outbox Engine (FEAT-05)           │   │
+│   │     - Merges offline sequential edits into single mutation     │   │
+│   │     - Preserves baseVersion for atomic MongoDB CAS update      │   │
+│   └────────────────────────────────┬───────────────────────────────┘   │
+└────────────────────────────────────┼───────────────────────────────────┘
+                                     │ HTTPS (TLS 1.3 Pinning)
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                     ACQUISENSE ENTERPRISE GATEWAY                      │
+│                                                                        │
+│   POST /api/mobile/sync/batch  ──► Mongoose findOneAndUpdate CAS       │
+│                                    { _id, __v: baseVersion, dealId }   │
+│   GET  /api/mobile/deals/:id/delta ──► Timestamp Cursor Catch-Up       │
+│   GET  /api/mobile/.../watermarked-stream ──► pdf-lib Diagonal Stamp   │
+│   POST /api/v1/mobile/copilot/stream ──► Redis Stream SSE Decoupler    │
+│   POST /api/v1/mobile/copilot/transcribe ──► Whisper M&A Dictation     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 14.2 Key Architectural Subsystems
+
+1. **Hardware Keystore & SQLCipher 256-Bit Storage (`SEC-03`, `BUG-04`, `BUG-09`)**:
+   - Keys are generated via `expo-crypto` and secured inside the hardware-backed `Android Keystore` using `SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY`.
+   - Lazy singleton initialization prevents `UserNotAuthenticatedException` crashes when Android wakes up headless background tasks (such as FCM silent pushes) while the device screen is locked.
+   - Database opened via `expo-sqlite` with `useSQLCipher: true` and unlocked using `PRAGMA key = "x'${hexKey}'";`.
+
+2. **Coalescing Outbox Engine (`FEAT-05`)**:
+   - If an analyst offline modifies the same finding multiple times (e.g. confirms finding, assigns to partner, adds closing escrow condition), `enqueueOrCoalesceMutation()` merges all edits into a single `PENDING` outbox entry while preserving the original `baseVersion`.
+   - This prevents self-inflicted Optimistic Concurrency Control (OCC) version conflicts during synchronization.
+
+3. **Atomic MongoDB Compare-and-Swap (`BUG-05`)**:
+   - `POST /api/mobile/sync/batch` executes:
+     `Finding.findOneAndUpdate({ _id: m.findingId, dealId: m.dealId, __v: m.baseVersion }, { $set: ..., $inc: { __v: 1 }, $push: ... }, { new: true })`.
+   - If `updated` is null, the gateway inspects whether the record exists to distinguish between an OCC `CONFLICT` and `NOT_FOUND`.
+
+4. **Decoupled Resumable Copilot SSE (`BUG-02`, `BUG-03`, `BUG-06`)**:
+   - A background worker on FastAPI generates LLM tokens and writes them to Redis Stream `copilot:stream:{message_id}` with `MAXLEN 2000`.
+   - The SSE endpoint reads from Redis via `XREAD` and supports `Last-Event-ID` resume cursors.
+   - Emits `: heartbeat\n\n` comments every 3 seconds to keep cellular carrier NAT connections open.
+   - Shared single-flight mutex in `api.ts` ensures token refreshes across Axios and SSE streams never trigger duplicate refreshes or invalidate valid tokens.
+
+5. **Forensic PDF Watermarking Stream (`FEAT-02`)**:
+   - `GET /api/mobile/deals/:dealId/files/:fileId/watermarked-stream` loads source contracts and dynamically burns a 35-degree diagonal stamp across each page:
+     `CONFIDENTIAL • ${user.email} • IP: ${req.ip} • ${timestamp} • STRICTLY PRIVATE & CONFIDENTIAL`.
+
+6. **Cryptographic Emergency MNPI Kill-Switch (`FEAT-01`)**:
+   - When an administrator revokes a lost device, the backend sets `wipeRequested: true` on `MobileDevice` and publishes a high-priority silent push event.
+   - On receipt or next network call (HTTP 403 `REMOTE_WIPE_REQUIRED`), `executeEmergencyMnpiWipe()` closes and deletes the SQLite database file, wipes MMKV, and deletes all hardware Keystore keys.
+
+---
+
+### 14.3 Staff/Principal System Design Interview Prep (Mobile Diligence)
+
+#### Q23: Why decouple the LLM stream from the mobile HTTP client using Redis Streams instead of streaming directly from FastAPI?
+> **Exemplary Answer**:
+> "Mobile cellular connections are inherently lossy — when an executive drives through a tunnel or enters an elevator, the TCP connection drops.
+> If FastAPI streams directly from OpenAI to the mobile client:
+> 1. The socket aborts, terminating the generator and losing the partial tokens.
+> 2. Reconnecting starts an expensive duplicate LLM call, inflating API costs and latency.
+> 
+> By decoupling via **Redis Streams** (`XADD copilot:stream:{message_id}`):
+> 1. The background task completes independently and persists tokens up to `MAXLEN 2000`.
+> 2. The client reconnects with `Last-Event-ID: <cursor>`, and the SSE consumer simply resumes with `XREAD count 20 STREAMS key cursor`.
+> 3. Zero duplicate OpenAI queries, zero lost tokens, and instantaneous resume."
+
+---
+
+#### Q24: How does your mobile app prevent Optimistic Concurrency Control (OCC) conflicts when an analyst makes multiple changes while disconnected in flight?
+> **Exemplary Answer**:
+> "Without coalescing, if an analyst confirms a finding (patch 1 based on version 4) and then assigns it to a colleague (patch 2 based on local version 5), flushing both sequentially would fail on the server: patch 2 expects version 5, but the server only had version 4.
+> 
+> We resolved this via a **Coalescing Transactional Outbox**:
+> 1. In `outboxWorker.ts`, `enqueueOrCoalesceMutation()` checks if a `PENDING` outbox entry already exists for that `findingId`.
+> 2. If it does, it merges the new fields into `patch_json` while **retaining the original `baseVersion: 4`**.
+> 3. When connectivity restores, a single atomic compare-and-swap mutation is sent to MongoDB (`findOneAndUpdate({ __v: 4 })`), advancing `__v` to 5 in one round-trip with zero conflict."
 - [x] **Technical Interview Masterclass**: 22 rigorously answered architectural, multi-agent, and full-stack questions.
