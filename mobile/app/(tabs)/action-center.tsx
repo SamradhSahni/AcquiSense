@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,304 +6,389 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
-  Modal,
-  TextInput,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  CheckSquare,
-  CheckCircle,
-  XCircle,
-  UserPlus,
-  PlusCircle,
+  UploadCloud,
   RefreshCw,
-  AlertTriangle,
-  Send,
+  User,
+  Pin,
+  Sliders,
+  DownloadCloud,
 } from 'lucide-react-native';
 import { SeverityBadge } from '../../src/components/ui/SeverityBadge';
+import { FindingActionModal } from '../../src/components/actions/FindingActionModal';
+import { VdrUploadModal } from '../../src/components/vdr/VdrUploadModal';
 import { getEncryptedDb } from '../../src/db/client';
-import { enqueueOrCoalesceMutation, flushOutboxQueue } from '../../src/db/outboxWorker';
-import { Finding } from '../../src/types';
+import { flushOutboxQueue, upsertFindingsToVault } from '../../src/db/outboxWorker';
+import {
+  getDeals,
+  getDealFindings,
+  syncJobFindings,
+} from '../../src/services/webApi';
+import { Deal, Finding, WorkflowState } from '../../src/types';
 
 export default function ActionCenterScreen() {
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [selectedDealId, setSelectedDealId] = useState<string>('ALL');
   const [findings, setFindings] = useState<Finding[]>([]);
   const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
+  const [workflowFilter, setWorkflowFilter] = useState<WorkflowState | 'ALL' | 'NEEDS_REVIEW'>('ALL');
+  const [severityFilter, setSeverityFilter] = useState<string>('ALL');
+  const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [conditionModalVisible, setConditionModalVisible] = useState(false);
-  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
-  const [conditionText, setConditionText] = useState('');
 
-  useEffect(() => {
-    refreshData();
-  }, []);
+  const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
-  const refreshData = () => {
+  useFocusEffect(
+    useCallback(() => {
+      refreshAll();
+    }, [selectedDealId])
+  );
+
+  const refreshAll = async () => {
+    setLoading(true);
+    try {
+      const serverDeals = await getDeals();
+      const dealList = Array.isArray(serverDeals) ? serverDeals : [];
+      setDeals(dealList);
+
+      const targetDeals =
+        selectedDealId === 'ALL'
+          ? dealList.slice(0, 8)
+          : dealList.filter((d) => (d._id || d.id) === selectedDealId);
+
+      for (const d of targetDeals) {
+        const dId = d._id || d.id;
+        try {
+          const res = await getDealFindings(dId, { limit: 100 });
+          if (res?.findings?.length) {
+            upsertFindingsToVault(dId, res.findings);
+          } else if (d.latestJobId && d.status === 'done') {
+            // Auto-sync findings from completed job into Mongo Finding collection
+            await syncJobFindings(d.latestJobId).catch(() => {});
+            const after = await getDealFindings(dId, { limit: 100 });
+            if (after?.findings?.length) upsertFindingsToVault(dId, after.findings);
+          }
+        } catch {
+          // ignore per-deal offline errors
+        }
+      }
+    } catch {
+      // Offline mode: use cached SQLite
+    } finally {
+      loadLocalFindings();
+      setLoading(false);
+    }
+  };
+
+  const loadLocalFindings = () => {
     try {
       const { sqlite } = getEncryptedDb();
-      const rows = sqlite.getAllSync<any>(`
-        SELECT * FROM findings
-        ORDER BY
-          CASE review_status WHEN 'ai_generated' THEN 1 ELSE 2 END,
-          CASE severity WHEN 'P0' THEN 1 WHEN 'P1' THEN 2 WHEN 'P2' THEN 3 ELSE 4 END
-        LIMIT 60
-      `);
-
-      if (rows) {
-        setFindings(
-          rows.map((r) => ({
-            id: r.id,
-            dealId: r.deal_id,
-            domain: r.domain,
-            severity: r.severity,
-            title: r.title,
-            description: r.description,
-            evidence: r.evidence,
-            citations: JSON.parse(r.citations_json || '[]'),
-            tags: JSON.parse(r.tags_json || '[]'),
-            workflowState: r.workflow_state,
-            reviewStatus: r.review_status,
-            assignedTo: r.assigned_to,
-            dueDate: r.due_date,
-            conditions: JSON.parse(r.conditions_json || '[]'),
-            auditLog: JSON.parse(r.audit_log_json || '[]'),
-            serverVersion: r.server_version,
-            isDirty: r.is_dirty === 1,
-            updatedAt: r.updated_at,
-          }))
-        );
+      let sql = `SELECT * FROM findings`;
+      const params: string[] = [];
+      if (selectedDealId !== 'ALL') {
+        sql += ` WHERE deal_id = ?`;
+        params.push(selectedDealId);
       }
+      sql += ` ORDER BY
+        CASE review_status WHEN 'ai_generated' THEN 1 ELSE 2 END,
+        CASE severity WHEN 'P0' THEN 1 WHEN 'P1' THEN 2 WHEN 'P2' THEN 3 ELSE 4 END
+        LIMIT 150`;
+
+      const rows = sqlite.getAllSync<any>(sql, params);
+      setFindings(
+        (rows || []).map((r) => ({
+          id: r.id,
+          _id: r.id,
+          dealId: r.deal_id,
+          domain: r.domain,
+          severity: r.severity,
+          title: r.title,
+          description: r.description,
+          evidence: r.evidence,
+          citations: JSON.parse(r.citations_json || '[]'),
+          tags: JSON.parse(r.tags_json || '[]'),
+          workflowState: r.workflow_state,
+          reviewStatus: r.review_status,
+          assignedTo: r.assigned_to,
+          dueDate: r.due_date,
+          conditions: JSON.parse(r.conditions_json || '[]'),
+          auditLog: JSON.parse(r.audit_log_json || '[]'),
+          serverVersion: r.server_version,
+          isDirty: r.is_dirty === 1,
+          updatedAt: r.updated_at,
+        }))
+      );
 
       const outbox = sqlite.getFirstSync<{ c: number }>(
         `SELECT COUNT(*) as c FROM sync_outbox WHERE status = 'PENDING'`
       );
       setPendingOutboxCount(outbox?.c || 0);
     } catch (e) {
-      console.warn('Action center load error:', e);
+      console.warn('Action center local query error:', e);
     }
   };
 
-  const handleTriageAction = (
-    finding: Finding,
-    action: 'confirm' | 'reject' | 'assign',
-    assignee?: string
-  ) => {
-    try {
-      let patch = {};
-      if (action === 'confirm') {
-        patch = { reviewStatus: 'confirmed', workflowState: 'verified' };
-      } else if (action === 'reject') {
-        patch = { reviewStatus: 'rejected', workflowState: 'closed' };
-      } else if (action === 'assign') {
-        patch = { workflowState: 'assigned', assignedTo: assignee || 'Senior Legal Counsel' };
-      }
-
-      enqueueOrCoalesceMutation({
-        dealId: finding.dealId,
-        findingId: finding.id,
-        actionName: action,
-        patch,
-        notes: `Triage action: ${action} executed from Mobile Action Center`,
-      });
-
-      refreshData();
-    } catch (e: any) {
-      Alert.alert('Action Error', e.message);
-    }
-  };
-
-  const handleAddCondition = () => {
-    if (!conditionText.trim() || !selectedFindingId) return;
-    const target = findings.find((f) => f.id === selectedFindingId);
-    if (!target) return;
-
-    try {
-      enqueueOrCoalesceMutation({
-        dealId: target.dealId,
-        findingId: target.id,
-        actionName: 'add_closing_condition',
-        patch: {
-          addedConditions: [{ text: conditionText.trim() }],
-        },
-        notes: 'Closing condition added from mobile',
-      });
-
-      setConditionText('');
-      setConditionModalVisible(false);
-      setSelectedFindingId(null);
-      refreshData();
-      Alert.alert('Condition Queued', 'Closing condition merged into coalescing outbox queue.');
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  };
-
-  const handleFlushSync = async () => {
+  const handleSyncAndFlush = async () => {
     setIsSyncing(true);
     try {
-      const result = await flushOutboxQueue();
-      refreshData();
+      const outboxRes = await flushOutboxQueue();
+      const targetDeal =
+        selectedDealId !== 'ALL'
+          ? deals.find((d) => (d._id || d.id) === selectedDealId)
+          : deals.find((d) => d.latestJobId && d.status === 'done');
+
+      if (targetDeal?.latestJobId) {
+        await syncJobFindings(targetDeal.latestJobId).catch(() => {});
+      }
+      await refreshAll();
       Alert.alert(
-        'Outbox Synchronized',
-        `Batch sync applied: ${result.applied} mutations.\nConflicts detected: ${result.conflicts}.`
+        'Action Center Synced',
+        `Outbox flushed (${outboxRes.applied} applied, ${outboxRes.conflicts} conflicts) and findings refreshed from server.`
       );
     } catch (e: any) {
-      Alert.alert('Sync Notice', 'Offline or server unreachable. Changes safely stored in encrypted outbox.');
+      Alert.alert('Sync Notice', 'Offline or server unreachable. Changes remain safely queued in outbox.');
     } finally {
       setIsSyncing(false);
     }
   };
+
+  const counts = {
+    open: findings.filter((f) => f.workflowState === 'open').length,
+    assigned: findings.filter((f) => f.workflowState === 'assigned').length,
+    remediating: findings.filter((f) => f.workflowState === 'remediating').length,
+    verified: findings.filter((f) => f.workflowState === 'verified').length,
+    closed: findings.filter((f) => f.workflowState === 'closed').length,
+    needsReview: findings.filter((f) => f.reviewStatus === 'ai_generated').length,
+  };
+
+  const filtered = findings.filter((f) => {
+    if (severityFilter !== 'ALL' && f.severity !== severityFilter) return false;
+    if (workflowFilter === 'ALL') return true;
+    if (workflowFilter === 'NEEDS_REVIEW') return f.reviewStatus === 'ai_generated';
+    return f.workflowState === workflowFilter;
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.title}>Risk Action Center</Text>
-            <Text style={styles.subtitle}>Executive Triage & Closing Conditions</Text>
+            <Text style={styles.subtitle}>Assign Tasks, Triage & Upload VDR Docs</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.syncBtn, isSyncing && { opacity: 0.5 }]}
-            onPress={handleFlushSync}
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <ActivityIndicator size="small" color="#06B6D4" />
-            ) : (
-              <>
-                <RefreshCw size={14} color="#06B6D4" style={{ marginRight: 6 }} />
-                <Text style={styles.syncBtnText}>
-                  Sync ({pendingOutboxCount})
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.headerBtns}>
+            <TouchableOpacity
+              style={styles.uploadActionBtn}
+              onPress={() => setUploadModalOpen(true)}
+            >
+              <UploadCloud size={14} color="#FFFFFF" />
+              <Text style={styles.uploadActionText}>Upload</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.syncBtn, isSyncing && { opacity: 0.5 }]}
+              onPress={handleSyncAndFlush}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#06B6D4" />
+              ) : (
+                <>
+                  <RefreshCw size={14} color="#06B6D4" />
+                  <Text style={styles.syncBtnText}>
+                    {pendingOutboxCount > 0 ? `Sync (${pendingOutboxCount})` : 'Sync'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Triage Findings List */}
-        <FlatList
-          data={findings}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <View style={[styles.card, item.isDirty && styles.cardDirty]}>
-              <View style={styles.cardTop}>
-                <SeverityBadge severity={item.severity} />
-                <View style={styles.statusPillsRow}>
-                  <View style={styles.domainPill}>
-                    <Text style={styles.domainPillText}>{item.domain.toUpperCase()}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.reviewStatusPill,
-                      item.reviewStatus === 'confirmed' && styles.statusConfirmed,
-                      item.reviewStatus === 'rejected' && styles.statusRejected,
-                    ]}
-                  >
-                    <Text style={styles.reviewStatusText}>{item.reviewStatus.toUpperCase()}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <Text style={styles.findingTitle}>{item.title}</Text>
-              <Text style={styles.findingDesc} numberOfLines={2}>
-                {item.description}
+        {/* Deal Selector Ribbon */}
+        <View style={styles.ribbonWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              style={[styles.dealChip, selectedDealId === 'ALL' && styles.dealChipActive]}
+              onPress={() => setSelectedDealId('ALL')}
+            >
+              <Text
+                style={[styles.dealChipText, selectedDealId === 'ALL' && styles.dealChipTextActive]}
+              >
+                All Deals
               </Text>
-
-              {item.conditions && item.conditions.length > 0 && (
-                <View style={styles.conditionsBox}>
-                  <Text style={styles.conditionsHeader}>
-                    CLOSING CONDITIONS ({item.conditions.length}):
+            </TouchableOpacity>
+            {deals.map((d) => {
+              const id = d._id || d.id;
+              const active = selectedDealId === id;
+              return (
+                <TouchableOpacity
+                  key={id}
+                  style={[styles.dealChip, active && styles.dealChipActive]}
+                  onPress={() => setSelectedDealId(id)}
+                >
+                  <Text
+                    style={[styles.dealChipText, active && styles.dealChipTextActive]}
+                    numberOfLines={1}
+                  >
+                    {d.name}
                   </Text>
-                  {item.conditions.map((c, i) => (
-                    <Text key={i} style={styles.conditionItem} numberOfLines={1}>
-                      {'\u2022'} {c.text}
-                    </Text>
-                  ))}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 6-Tile Workflow KPI Filter Ribbon */}
+        <View style={styles.kpiRibbonWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {(
+              [
+                { key: 'ALL', label: 'All', count: findings.length, color: '#E2E8F0' },
+                { key: 'open', label: 'Open', count: counts.open, color: '#94A3B8' },
+                { key: 'assigned', label: 'Assigned', count: counts.assigned, color: '#60A5FA' },
+                { key: 'remediating', label: 'Remediating', count: counts.remediating, color: '#F59E0B' },
+                { key: 'verified', label: 'Verified', count: counts.verified, color: '#06B6D4' },
+                { key: 'closed', label: 'Closed', count: counts.closed, color: '#10B981' },
+                { key: 'NEEDS_REVIEW', label: 'Needs Review', count: counts.needsReview, color: '#A78BFA' },
+              ] as const
+            ).map((tile) => {
+              const active = workflowFilter === tile.key;
+              return (
+                <TouchableOpacity
+                  key={tile.key}
+                  style={[styles.kpiTile, active && { borderColor: tile.color, backgroundColor: '#182032' }]}
+                  onPress={() => setWorkflowFilter(tile.key as any)}
+                >
+                  <Text style={styles.kpiLabel}>{tile.label}</Text>
+                  <Text style={[styles.kpiNum, { color: tile.color }]}>{tile.count}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Severity Filter Pills */}
+        <View style={styles.sevRow}>
+          {['ALL', 'P0', 'P1', 'P2', 'P3'].map((sev) => (
+            <TouchableOpacity
+              key={sev}
+              style={[styles.sevPill, severityFilter === sev && styles.sevPillActive]}
+              onPress={() => setSeverityFilter(sev)}
+            >
+              <Text style={[styles.sevPillText, severityFilter === sev && styles.sevPillTextActive]}>
+                {sev}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Findings List */}
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#06B6D4" />
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={styles.centered}>
+            <DownloadCloud size={32} color="#334155" />
+            <Text style={styles.emptyTitle}>No Findings Matching Filter</Text>
+            <Text style={styles.emptySub}>
+              Tap Sync to pull completed job findings or Upload VDR docs to start a new audit.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.card, item.isDirty && styles.cardDirty]}
+                onPress={() => {
+                  setActiveFinding(item);
+                  setActionModalOpen(true);
+                }}
+              >
+                <View style={styles.cardTop}>
+                  <SeverityBadge severity={item.severity} />
+                  <View style={styles.statusPillsRow}>
+                    <View style={styles.domainPill}>
+                      <Text style={styles.domainPillText}>{item.domain.toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.domainPill}>
+                      <Text style={styles.domainPillText}>{item.workflowState.toUpperCase()}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.reviewStatusPill,
+                        item.reviewStatus === 'confirmed' && styles.statusConfirmed,
+                        item.reviewStatus === 'rejected' && styles.statusRejected,
+                      ]}
+                    >
+                      <Text style={styles.reviewStatusText}>
+                        {item.reviewStatus.replace('_', ' ').toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-              )}
 
-              {/* Triage Button Controls */}
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.confirmBtn]}
-                  onPress={() => handleTriageAction(item, 'confirm')}
-                >
-                  <CheckCircle size={14} color="#10B981" style={{ marginRight: 4 }} />
-                  <Text style={styles.confirmBtnText}>Confirm</Text>
-                </TouchableOpacity>
+                <Text style={styles.findingTitle}>{item.title}</Text>
+                <Text style={styles.findingDesc} numberOfLines={2}>
+                  {item.description}
+                </Text>
 
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.assignBtn]}
-                  onPress={() => handleTriageAction(item, 'assign', 'Senior Partner')}
-                >
-                  <UserPlus size={14} color="#3B82F6" style={{ marginRight: 4 }} />
-                  <Text style={styles.assignBtnText}>Assign</Text>
-                </TouchableOpacity>
+                <View style={styles.cardFooter}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    {item.assignedTo ? (
+                      <View style={styles.metaBadge}>
+                        <User size={11} color="#60A5FA" style={{ marginRight: 4 }} />
+                        <Text style={styles.metaBadgeText} numberOfLines={1}>
+                          {item.assignedTo}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.unassignedText}>Unassigned</Text>
+                    )}
 
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.conditionBtn]}
-                  onPress={() => {
-                    setSelectedFindingId(item.id);
-                    setConditionModalVisible(true);
-                  }}
-                >
-                  <PlusCircle size={14} color="#06B6D4" style={{ marginRight: 4 }} />
-                  <Text style={styles.conditionBtnText}>Condition</Text>
-                </TouchableOpacity>
+                    {item.conditions?.length > 0 && (
+                      <View style={[styles.metaBadge, { marginLeft: 8 }]}>
+                        <Pin size={11} color="#06B6D4" style={{ marginRight: 3 }} />
+                        <Text style={styles.metaBadgeText}>{item.conditions.length} Cond.</Text>
+                      </View>
+                    )}
+                  </View>
 
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.rejectBtn]}
-                  onPress={() => handleTriageAction(item, 'reject')}
-                >
-                  <XCircle size={14} color="#F43F5E" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+                  <View style={styles.manageBtn}>
+                    <Sliders size={12} color="#06B6D4" style={{ marginRight: 4 }} />
+                    <Text style={styles.manageBtnText}>Manage / Assign</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        )}
+
+        <FindingActionModal
+          visible={actionModalOpen}
+          finding={activeFinding}
+          onClose={() => setActionModalOpen(false)}
+          onUpdated={refreshAll}
         />
 
-        {/* Modal for adding Closing Condition */}
-        <Modal
-          visible={conditionModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setConditionModalVisible(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Add Closing Condition</Text>
-              <Text style={styles.modalDesc}>
-                Define an escrow holdback, indemnity clause, or covenant requirement.
-              </Text>
-
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Require target to escrow $2.5M until IP assignment is perfected."
-                placeholderTextColor="#64748B"
-                multiline
-                numberOfLines={3}
-                value={conditionText}
-                onChangeText={setConditionText}
-              />
-
-              <View style={styles.modalBtnRow}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setConditionModalVisible(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleAddCondition}>
-                  <Send size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.modalSubmitText}>Save & Queue</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <VdrUploadModal
+          visible={uploadModalOpen}
+          initialDealId={selectedDealId !== 'ALL' ? selectedDealId : undefined}
+          onClose={() => setUploadModalOpen(false)}
+          onUploaded={() => refreshAll()}
+        />
       </View>
     </SafeAreaView>
   );
@@ -323,33 +408,143 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: 11,
     color: '#94A3B8',
     marginTop: 2,
   },
+  headerBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  uploadActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0891B2',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 5,
+  },
+  uploadActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   syncBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(6, 182, 212, 0.12)',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.3)',
+    gap: 5,
   },
   syncBtnText: {
     color: '#06B6D4',
     fontSize: 12,
     fontWeight: '700',
+  },
+  ribbonWrap: {
+    marginBottom: 10,
+  },
+  dealChip: {
+    backgroundColor: '#0E131F',
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    maxWidth: 160,
+  },
+  dealChipActive: {
+    borderColor: '#3B82F6',
+    backgroundColor: 'rgba(59,130,246,0.16)',
+  },
+  dealChipText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dealChipTextActive: {
+    color: '#93C5FD',
+  },
+  kpiRibbonWrap: {
+    marginBottom: 10,
+  },
+  kpiTile: {
+    backgroundColor: '#0E131F',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    minWidth: 78,
+  },
+  kpiLabel: {
+    fontSize: 9,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  kpiNum: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  sevRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  sevPill: {
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#0E131F',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  sevPillActive: {
+    borderColor: '#06B6D4',
+    backgroundColor: 'rgba(6, 182, 212, 0.14)',
+  },
+  sevPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  sevPillTextActive: {
+    color: '#67E8F9',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    color: '#E2E8F0',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  emptySub: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
   },
   card: {
     backgroundColor: '#0E131F',
@@ -357,30 +552,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   cardDirty: {
-    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderColor: 'rgba(245, 158, 11, 0.45)',
   },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   statusPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
   },
   domainPill: {
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    marginRight: 6,
   },
   domainPillText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: '#94A3B8',
   },
@@ -413,23 +610,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: 10,
   },
-  conditionsBox: {
-    backgroundColor: 'rgba(6, 182, 212, 0.05)',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 10,
-  },
-  conditionsHeader: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#06B6D4',
-    marginBottom: 4,
-  },
-  conditionItem: {
-    fontSize: 11,
-    color: '#CBD5E1',
-  },
-  actionRow: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -437,104 +618,35 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
-  actionBtn: {
+  metaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    maxWidth: 140,
+  },
+  metaBadgeText: {
+    fontSize: 10,
+    color: '#CBD5E1',
+    fontWeight: '600',
+  },
+  unassignedText: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  manageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 6,
   },
-  confirmBtn: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-  },
-  confirmBtnText: {
-    color: '#34D399',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  assignBtn: {
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-  },
-  assignBtnText: {
-    color: '#60A5FA',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  conditionBtn: {
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-  },
-  conditionBtnText: {
+  manageBtnText: {
     color: '#67E8F9',
     fontSize: 11,
-    fontWeight: '600',
-  },
-  rejectBtn: {
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
-    paddingHorizontal: 8,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    backgroundColor: '#0E131F',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  modalTitle: {
-    fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  modalDesc: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginBottom: 14,
-  },
-  modalInput: {
-    backgroundColor: '#182032',
-    borderRadius: 8,
-    padding: 10,
-    color: '#FFFFFF',
-    fontSize: 13,
-    textAlignVertical: 'top',
-    height: 80,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
-  },
-  modalBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  modalCancelBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginRight: 8,
-  },
-  modalCancelText: {
-    color: '#94A3B8',
-    fontSize: 13,
-  },
-  modalSubmitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0891B2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  modalSubmitText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });
-

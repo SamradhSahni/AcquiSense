@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { User, MobileDevice } = require('../models');
+const { User, Company, Group, MobileDevice } = require('../models');
 const { publishPushNotification } = require('../workers/fcmPushWorker');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_change_in_production';
@@ -93,11 +93,120 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         company: user.company ? { id: tenantId, name: user.company.name } : null,
+        groups: (user.groups || []).map((g) => ({
+          id: g._id,
+          name: g.name,
+          permissions: g.permissions || [],
+        })),
       },
     });
   } catch (err) {
     console.error('[Mobile Login Error]:', err);
     res.status(500).json({ error: 'Mobile authentication failed' });
+  }
+});
+
+/**
+ * POST /api/auth/mobile/register
+ * Provision a new firm organization + admin user + mobile device session
+ */
+router.post('/register', async (req, res) => {
+  try {
+    const { companyName, adminEmail, adminPassword, adminName, deviceId, platform, appVersion } = req.body;
+    if (!companyName || !adminEmail || !adminPassword || !adminName) {
+      return res.status(400).json({ error: 'Company name, admin name, email, and password are required.' });
+    }
+
+    const existingCompany = await Company.findOne({ name: companyName.trim() });
+    if (existingCompany) {
+      return res.status(400).json({ error: 'Company with this name already exists.' });
+    }
+
+    const existingUser = await User.findOne({ email: adminEmail.toLowerCase().trim() });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User with this email already exists.' });
+    }
+
+    const company = new Company({ name: companyName.trim() });
+    await company.save();
+
+    const adminPermissions = [
+      '*',
+      'user:create', 'user:read', 'user:update', 'user:delete',
+      'group:create', 'group:read', 'group:update', 'group:delete',
+      'deal:create', 'deal:read', 'deal:update', 'deal:delete',
+      'job:create', 'job:read', 'job:update', 'job:delete', 'job:sync',
+      'report:read', 'report:generate',
+      'task:create', 'task:read', 'task:update', 'task:delete', 'task:assign',
+      'finding:read', 'finding:update', 'finding:assign', 'finding:review',
+    ];
+    const adminGroup = new Group({
+      name: 'admin',
+      description: 'Administrator group with all permissions',
+      permissions: adminPermissions,
+      company: company._id,
+    });
+    await adminGroup.save();
+
+    const user = new User({
+      email: adminEmail.toLowerCase().trim(),
+      password: adminPassword,
+      name: adminName.trim(),
+      company: company._id,
+      groups: [adminGroup._id],
+    });
+    await user.save();
+
+    const effectiveDeviceId = deviceId || crypto.randomUUID();
+    const accessToken = jwt.sign(
+      {
+        userId: user._id,
+        sub: user._id.toString(),
+        companyId: company._id,
+        tenantId: company._id.toString(),
+        email: user.email,
+        name: user.name,
+      },
+      JWT_SECRET,
+      { expiresIn: MOBILE_ACCESS_EXPIRY }
+    );
+
+    const rawRefreshToken = crypto.randomBytes(32).toString('hex');
+    const refreshTokenHash = hashRefreshToken(rawRefreshToken);
+
+    await MobileDevice.findOneAndUpdate(
+      { deviceId: effectiveDeviceId },
+      {
+        $set: {
+          userId: user._id,
+          tenantId: company._id,
+          platform: platform === 'ios' ? 'ios' : 'android',
+          appVersion: appVersion || '3.0.0',
+          refreshTokenHash,
+          lastIpAddress: req.ip || req.connection?.remoteAddress,
+          wipeRequested: false,
+          wipeAcknowledgedAt: null,
+          lastSeenAt: new Date(),
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    res.status(201).json({
+      accessToken,
+      refreshToken: rawRefreshToken,
+      deviceId: effectiveDeviceId,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        company: { id: company._id, name: company.name },
+        groups: [{ id: adminGroup._id, name: adminGroup.name, permissions: adminGroup.permissions }],
+      },
+    });
+  } catch (err) {
+    console.error('[Mobile Register Error]:', err);
+    res.status(500).json({ error: 'Mobile registration failed' });
   }
 });
 

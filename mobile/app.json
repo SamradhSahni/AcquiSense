@@ -20,7 +20,11 @@
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "plugins": [
@@ -52,7 +56,15 @@
           "microphonePermission": "Allow AcquiSense Pocket Copilot to transcribe your voice questions."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7960f69e-dcec-4f06-a3c0-abd325d509fb"
+      }
+    },
+    "owner": "samradhsahni"
   }
 }
-

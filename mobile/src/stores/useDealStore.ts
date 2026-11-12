@@ -1,7 +1,16 @@
 import { create } from 'zustand';
 import { Deal, Finding, Citation, DiligenceDomain, Severity } from '../types';
 
-export type DealDossierTab = 'verdict' | 'findings' | 'heatmap' | 'graph' | 'analyst_q' | 'vdr';
+export type DealDossierTab =
+  | 'verdict'
+  | 'findings'
+  | 'heatmap'
+  | 'graph'
+  | 'analyst_q'
+  | 'actions'
+  | 'compare'
+  | 'agents'
+  | 'vdr';
 
 interface DealState {
   selectedDeal: Deal | null;

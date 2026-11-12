@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,28 +8,45 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
+  ScrollView,
+  Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, ShieldAlert, ArrowUpRight, TrendingUp, Filter } from 'lucide-react-native';
+import {
+  Search,
+  ShieldAlert,
+  ArrowUpRight,
+  Plus,
+  FileText,
+  Trash2,
+  Terminal,
+} from 'lucide-react-native';
 import { GlowCard } from '../../src/components/ui/GlowCard';
+import { CommandPaletteModal } from '../../src/components/ui/CommandPaletteModal';
 import { useDealStore } from '../../src/stores/useDealStore';
-import { apiClient } from '../../src/services/api';
+import { getDeals, deleteDeal } from '../../src/services/webApi';
 import { getEncryptedDb } from '../../src/db/client';
 import { Deal } from '../../src/types';
 
+type StatusFilter = 'all' | 'analyzing' | 'done' | 'draft' | 'failed';
+
 export default function DealPipelineScreen() {
   const router = useRouter();
-  const { setSelectedDeal } = useDealStore();
+  const { setSelectedDeal, setActiveTab } = useDealStore();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
 
-  useEffect(() => {
-    loadLocalDeals();
-    fetchRemoteDeals();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadLocalDeals();
+      fetchRemoteDeals();
+    }, [])
+  );
 
   const loadLocalDeals = () => {
     try {
@@ -39,6 +56,7 @@ export default function DealPipelineScreen() {
         setDeals(
           rows.map((r) => ({
             id: r.id,
+            _id: r.id,
             name: r.name,
             targetCompany: r.target_company,
             acquirer: r.acquirer,
@@ -61,7 +79,7 @@ export default function DealPipelineScreen() {
 
   const fetchRemoteDeals = async () => {
     try {
-      const { data } = await apiClient.get('/api/deals');
+      const data = await getDeals();
       if (Array.isArray(data)) {
         const { sqlite } = getEncryptedDb();
         sqlite.withTransactionSync(() => {
@@ -72,6 +90,9 @@ export default function DealPipelineScreen() {
                 go_no_go, overall_risk_score, total_findings, latest_job_id, updated_at
               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                target_company = excluded.target_company,
+                acquirer = excluded.acquirer,
                 status = excluded.status,
                 go_no_go = excluded.go_no_go,
                 overall_risk_score = excluded.overall_risk_score,
@@ -94,11 +115,16 @@ export default function DealPipelineScreen() {
             );
           }
         });
-        loadLocalDeals();
+        // Preserve full files array from server response
+        setDeals(
+          data.map((d) => ({
+            ...d,
+            id: d._id || d.id,
+          }))
+        );
       }
     } catch (e) {
       console.warn('Remote deals fetch error (offline mode active):', e);
-      // Seed default deal if completely empty
       const { sqlite } = getEncryptedDb();
       const count = sqlite.getFirstSync<{ c: number }>(`SELECT COUNT(*) as c FROM deals`);
       if (!count || count.c === 0) {
@@ -129,104 +155,68 @@ export default function DealPipelineScreen() {
         'done',
         'CAUTION',
         7.4,
-        28,
-        '# Executive Due Diligence Verdict\n\nOverall target profile demonstrates robust 48% YoY ARR growth, but critical liabilities in open-source copyleft licenses and $3.2M unrecorded sales tax obligations warrant an escrow adjustment of $8.5M.',
+        4,
+        'Overall target profile demonstrates robust 48% YoY ARR growth, but critical liabilities in open-source copyleft licenses and unrecorded sales tax obligations warrant an escrow adjustment of $8.5M.',
         now,
       ]
     );
-
-    // Seed 4 sample findings
-    const findingsList = [
-      {
-        id: 'find_01',
-        domain: 'legal',
-        severity: 'P0',
-        title: 'AGPL-3.0 Copyleft Contamination in Proprietary Kernel',
-        description: 'Target core dispatch microservice embeds an AGPL-3.0 dependency without dynamic linkage isolation.',
-        evidence: 'GitHub dependency manifest line 48: "marked-core: agpl-v3"',
-        citations: [{ file: 'IP_Audit_Report.pdf', page: 12, quote: 'Potential copyleft contamination requiring complete rewrite.' }],
-        tags: ['IP', 'OpenSource', 'Kernel'],
-        workflowState: 'open',
-        reviewStatus: 'ai_generated',
-      },
-      {
-        id: 'find_02',
-        domain: 'finance',
-        severity: 'P1',
-        title: 'QoE EBITDA Discrepancy: Recurring Software Capitalization',
-        description: '$1.4M of standard maintenance engineering expenses were capitalized onto the balance sheet as R&D.',
-        evidence: 'Q3 Financial Statements, Schedule B - Capitalized Software Assets',
-        citations: [{ file: 'QoE_Analysis_v3.pdf', page: 24, quote: 'Capitalization policy is overly aggressive compared to peer benchmark.' }],
-        tags: ['EBITDA', 'QoE', 'Accounting'],
-        workflowState: 'assigned',
-        reviewStatus: 'confirmed',
-      },
-      {
-        id: 'find_03',
-        domain: 'cyber',
-        severity: 'P1',
-        title: 'SOC2 Type II Audit Exception: Production DB Decoupled KMS',
-        description: 'Customer PII database in AWS us-east-1 lacks envelope encryption via customer-managed AWS KMS keys.',
-        evidence: 'SOC2 Type II Report page 37, Section IV Control Gap',
-        citations: [{ file: 'SOC2_Type_II_2025.pdf', page: 37, quote: 'KMS rotation was manually bypassed during migration.' }],
-        tags: ['Cyber', 'SOC2', 'Encryption'],
-        workflowState: 'remediating',
-        reviewStatus: 'confirmed',
-      },
-      {
-        id: 'find_04',
-        domain: 'tax',
-        severity: 'P2',
-        title: 'State Nexus Multi-State Sales Tax Non-Compliance',
-        description: 'Wayfair economic nexus exceeded in 14 jurisdictions without timely remittance or registration.',
-        evidence: 'State Tax Nexus Study FY24-FY25',
-        citations: [{ file: 'State_Tax_Nexus_Review.pdf', page: 9, quote: 'Estimated unreserved exposure is $1.2M plus statutory interest.' }],
-        tags: ['Tax', 'Nexus', 'Wayfair'],
-        workflowState: 'open',
-        reviewStatus: 'ai_generated',
-      },
-    ];
-
-    for (const f of findingsList) {
-      sqlite.runSync(
-        `INSERT OR REPLACE INTO findings (
-          id, deal_id, domain, severity, title, description, evidence,
-          citations_json, tags_json, workflow_state, review_status,
-          conditions_json, audit_log_json, server_version, is_dirty, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', 1, 0, ?)`,
-        [
-          f.id,
-          dealId,
-          f.domain,
-          f.severity,
-          f.title,
-          f.description,
-          f.evidence,
-          JSON.stringify(f.citations),
-          JSON.stringify(f.tags),
-          f.workflowState,
-          f.reviewStatus,
-          now,
-        ]
-      );
-    }
   };
 
-  const filteredDeals = deals.filter(
-    (d) =>
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.targetCompany.toLowerCase().includes(search.toLowerCase()) ||
-      d.acquirer.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleDeleteDeal = (deal: Deal) => {
+    const dealId = deal._id || deal.id;
+    Alert.alert('Delete Deal Vault', `Permanently delete "${deal.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteDeal(dealId);
+          } catch {
+            // offline ignore
+          }
+          try {
+            const { sqlite } = getEncryptedDb();
+            sqlite.runSync(`DELETE FROM deals WHERE id = ?`, [dealId]);
+            sqlite.runSync(`DELETE FROM findings WHERE deal_id = ?`, [dealId]);
+          } catch {
+            // ignore
+          }
+          setDeals((prev) => prev.filter((d) => (d._id || d.id) !== dealId));
+        },
+      },
+    ]);
+  };
 
-  const totalFindingsCount = deals.reduce((acc, d) => acc + (d.totalFindings || 0), 0);
-  const avgRisk = deals.length
-    ? (deals.reduce((acc, d) => acc + (d.overallRiskScore || 0), 0) / deals.length).toFixed(1)
+  const filteredDeals = deals.filter((d) => {
+    const matchesSearch =
+      d.name.toLowerCase().includes(search.toLowerCase()) ||
+      (d.targetCompany || '').toLowerCase().includes(search.toLowerCase()) ||
+      (d.acquirer || '').toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'analyzing') return d.status === 'analyzing' || d.status === 'queued';
+    return d.status === statusFilter;
+  });
+
+  const completedCount = deals.filter((d) => d.status === 'done').length;
+  const activeInFlight = deals.filter((d) => d.status === 'analyzing' || d.status === 'queued').length;
+  const scored = deals.filter((d) => (d.overallRiskScore || 0) > 0);
+  const avgRisk = scored.length
+    ? (scored.reduce((acc, d) => acc + (d.overallRiskScore || 0), 0) / scored.length).toFixed(1)
     : '0.0';
 
   const handleSelectDeal = (deal: Deal) => {
     setSelectedDeal(deal);
-    router.push(`/deal/${deal.id}`);
+    setActiveTab(deal.status === 'analyzing' || deal.status === 'queued' ? 'agents' : 'verdict');
+    router.push(`/deal/${deal._id || deal.id}`);
+  };
+
+  const getRiskColor = (score: number) => {
+    if (score >= 7) return '#F43F5E';
+    if (score >= 4) return '#F59E0B';
+    if (score > 0) return '#10B981';
+    return '#64748B';
   };
 
   return (
@@ -238,33 +228,46 @@ export default function DealPipelineScreen() {
             <Text style={styles.headerTitle}>Deal Pipeline</Text>
             <Text style={styles.headerSubtitle}>Institutional M&A Diligence Engine</Text>
           </View>
-          <View style={styles.offlineStatusPill}>
-            <View style={styles.offlineDot} />
-            <Text style={styles.offlineText}>Encrypted Vault Sync</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.cmdBtn} onPress={() => setCmdOpen(true)}>
+              <Terminal size={15} color="#06B6D4" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.newDealBtn}
+              onPress={() => router.push('/(tabs)/new-deal')}
+            >
+              <Plus size={15} color="#FFFFFF" />
+              <Text style={styles.newDealBtnText}>New Deal</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Executive Metrics Overview */}
+        {/* 4 Executive KPI Cards */}
         <View style={styles.metricsRow}>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>ACTIVE DOSSIERS</Text>
+            <Text style={styles.metricLabel}>TOTAL DEALS</Text>
             <Text style={styles.metricValue}>{deals.length}</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>TOTAL FINDINGS</Text>
-            <Text style={styles.metricValue}>{totalFindingsCount}</Text>
+            <Text style={styles.metricLabel}>COMPLETE</Text>
+            <Text style={[styles.metricValue, { color: '#10B981' }]}>{completedCount}</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>AVG RISK SCORE</Text>
-            <Text style={[styles.metricValue, { color: '#F59E0B' }]}>{avgRisk} / 10</Text>
+            <Text style={styles.metricLabel}>IN FLIGHT</Text>
+            <Text style={[styles.metricValue, { color: '#06B6D4' }]}>{activeInFlight}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricBox}>
+            <Text style={styles.metricLabel}>AVG RISK</Text>
+            <Text style={[styles.metricValue, { color: '#F59E0B' }]}>{avgRisk}</Text>
           </View>
         </View>
 
-        {/* Search Bar */}
+        {/* Search & Status Filters */}
         <View style={styles.searchBar}>
-          <Search size={18} color="#64748B" style={{ marginRight: 8 }} />
+          <Search size={17} color="#64748B" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search deals, targets, acquirers..."
@@ -274,15 +277,51 @@ export default function DealPipelineScreen() {
           />
         </View>
 
+        <View style={{ marginBottom: 12 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {(
+              [
+                { key: 'all', label: 'All' },
+                { key: 'analyzing', label: 'Analyzing' },
+                { key: 'done', label: 'Complete' },
+                { key: 'draft', label: 'Draft' },
+                { key: 'failed', label: 'Failed' },
+              ] as const
+            ).map((f) => (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterPill, statusFilter === f.key && styles.filterPillActive]}
+                onPress={() => setStatusFilter(f.key)}
+              >
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    statusFilter === f.key && styles.filterPillTextActive,
+                  ]}
+                >
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Deals List */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#06B6D4" />
           </View>
+        ) : filteredDeals.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No Matching Deals</Text>
+            <Text style={styles.emptySub}>
+              Tap "+ New Deal" to upload VDR files and deploy the 13 forensic AI agents.
+            </Text>
+          </View>
         ) : (
           <FlatList
             data={filteredDeals}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item._id || item.id}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -294,48 +333,86 @@ export default function DealPipelineScreen() {
                 tintColor="#06B6D4"
               />
             }
-            renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => handleSelectDeal(item)}>
-                <GlowCard decision={item.goNoGo}>
-                  <View style={styles.cardHeader}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={styles.dealName}>{item.name}</Text>
-                      <Text style={styles.companySub}>
-                        {item.targetCompany || 'Target Entity'} {'\u2192'} {item.acquirer || 'Acquirer'}
-                      </Text>
-                    </View>
-                    <ArrowUpRight size={20} color="#94A3B8" />
-                  </View>
+            renderItem={({ item }) => {
+              const riskScore = Number(item.overallRiskScore || 0);
+              const riskPct = Math.min(100, Math.max(0, (riskScore / 10) * 100));
+              const riskColor = getRiskColor(riskScore);
 
-                  <View style={styles.cardFooter}>
-                    <View style={styles.decisionBadge}>
-                      <Text
-                        style={[
-                          styles.decisionText,
-                          item.goNoGo === 'GO' && { color: '#10B981' },
-                          item.goNoGo === 'CAUTION' && { color: '#F59E0B' },
-                          item.goNoGo === 'NO-GO' && { color: '#F43F5E' },
-                        ]}
+              return (
+                <TouchableOpacity onPress={() => handleSelectDeal(item)}>
+                  <GlowCard decision={item.goNoGo}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={styles.dealName}>{item.name}</Text>
+                        <Text style={styles.companySub}>
+                          {item.targetCompany || 'Target Entity'} {'\u2192'}{' '}
+                          {item.acquirer || 'Acquirer'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteDeal(item)}
+                        style={{ padding: 4, marginRight: 4 }}
                       >
-                        {item.goNoGo || 'PENDING'}
-                      </Text>
+                        <Trash2 size={16} color="#64748B" />
+                      </TouchableOpacity>
+                      <ArrowUpRight size={20} color="#94A3B8" />
                     </View>
 
-                    <View style={styles.badgeRow}>
-                      <View style={styles.statPill}>
-                        <ShieldAlert size={12} color="#06B6D4" style={{ marginRight: 4 }} />
-                        <Text style={styles.statPillText}>{item.totalFindings} Findings</Text>
+                    {/* Risk Meter */}
+                    <View style={styles.riskWrap}>
+                      <View style={styles.riskRow}>
+                        <Text style={styles.riskLabel}>Forensic Risk Score</Text>
+                        <Text style={[styles.riskVal, { color: riskColor }]}>
+                          {riskScore > 0 ? riskScore.toFixed(1) : '—'} / 10
+                        </Text>
                       </View>
-                      <View style={[styles.statPill, { marginLeft: 8 }]}>
-                        <Text style={styles.statPillText}>Risk: {item.overallRiskScore || 0}/10</Text>
+                      <View style={styles.riskTrack}>
+                        <View
+                          style={[
+                            styles.riskFill,
+                            { width: `${riskPct}%`, backgroundColor: riskColor },
+                          ]}
+                        />
                       </View>
                     </View>
-                  </View>
-                </GlowCard>
-              </TouchableOpacity>
-            )}
+
+                    <View style={styles.cardFooter}>
+                      <View style={styles.decisionBadge}>
+                        <Text
+                          style={[
+                            styles.decisionText,
+                            item.goNoGo === 'GO' && { color: '#10B981' },
+                            item.goNoGo === 'CAUTION' && { color: '#F59E0B' },
+                            item.goNoGo === 'NO-GO' && { color: '#F43F5E' },
+                          ]}
+                        >
+                          {item.goNoGo || item.status.toUpperCase()}
+                        </Text>
+                      </View>
+
+                      <View style={styles.badgeRow}>
+                        <View style={styles.statPill}>
+                          <ShieldAlert size={12} color="#06B6D4" style={{ marginRight: 4 }} />
+                          <Text style={styles.statPillText}>
+                            {item.totalFindings || 0} Findings
+                          </Text>
+                        </View>
+                        {item.files && item.files.length > 0 && (
+                          <View style={[styles.statPill, { marginLeft: 6 }]}>
+                            <FileText size={12} color="#60A5FA" style={{ marginRight: 4 }} />
+                            <Text style={styles.statPillText}>{item.files.length} Docs</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </GlowCard>
+                </TouchableOpacity>
+              );
+            }}
           />
         )}
+
+        <CommandPaletteModal visible={cmdOpen} onClose={() => setCmdOpen(false)} />
       </View>
     </SafeAreaView>
   );
@@ -355,7 +432,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerTitle: {
     fontSize: 22,
@@ -368,39 +445,46 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
   },
-  offlineStatusPill: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    gap: 8,
+  },
+  cmdBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    backgroundColor: '#0E131F',
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  offlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#06B6D4',
-    marginRight: 6,
+  newDealBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0891B2',
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 9,
+    gap: 5,
   },
-  offlineText: {
-    color: '#67E8F9',
-    fontSize: 10,
-    fontWeight: '600',
+  newDealBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   metricsRow: {
     flexDirection: 'row',
     backgroundColor: '#0E131F',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   metricBox: {
     alignItems: 'center',
@@ -410,17 +494,17 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   metricValue: {
     fontSize: 16,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginTop: 4,
+    marginTop: 3,
   },
   metricDivider: {
     width: 1,
-    height: 24,
+    height: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   searchBar: {
@@ -431,24 +515,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   searchInput: {
     flex: 1,
     color: '#FFFFFF',
-    paddingVertical: 10,
+    paddingVertical: 9,
     fontSize: 13,
+  },
+  filterPill: {
+    backgroundColor: '#0E131F',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginRight: 8,
+  },
+  filterPillActive: {
+    borderColor: '#06B6D4',
+    backgroundColor: 'rgba(6, 182, 212, 0.14)',
+  },
+  filterPillText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  filterPillTextActive: {
+    color: '#67E8F9',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    color: '#E2E8F0',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  emptySub: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 6,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   dealName: {
     fontSize: 16,
@@ -459,6 +581,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94A3B8',
     marginTop: 3,
+  },
+  riskWrap: {
+    marginBottom: 10,
+  },
+  riskRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  riskLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  riskVal: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  riskTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  riskFill: {
+    height: '100%',
+    borderRadius: 2,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -498,4 +647,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-

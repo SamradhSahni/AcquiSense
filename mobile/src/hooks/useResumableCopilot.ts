@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { Audio } from 'expo-av';
 import { useAuthStore } from '../stores/useAuthStore';
+import { useDealStore } from '../stores/useDealStore';
 import { API_BASE_URL, forceRefreshTokenWithMutex } from '../services/api';
+import { askCopilotRest } from '../services/webApi';
 
 export interface CopilotMessage {
   id: string;
@@ -60,14 +62,20 @@ export function useResumableCopilot(dealId: string) {
           }
 
           if (!response.ok || !response.body) {
-            // Fallback for mock/simulation when server response is plain text or json
-            const text = await response.text();
+            // Try Python REST Copilot fallback with Mongo report context
+            const dealObj = useDealStore.getState().selectedDeal;
+            const pyJobId = dealObj?.job?.pythonJobId || dealObj?.latestPythonJobId || null;
+            const restRes = await askCopilotRest(dealId, {
+              question: query,
+              job_id: pyJobId,
+            });
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === messageId
                   ? {
                       ...m,
-                      content: text || 'Insight generated for ' + query,
+                      content: restRes.answer || 'No copilot answer returned.',
+                      citations: restRes.citations || [],
                       isStreaming: false,
                     }
                   : m
@@ -125,21 +133,40 @@ export function useResumableCopilot(dealId: string) {
         } catch (err) {
           retries += 1;
           if (retries > maxRetries) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === messageId
-                  ? {
-                      ...m,
-                      content:
-                        m.content ||
-                        'Diligence synthesis for ' +
-                          query +
-                          ': cross-referenced 14 findings in VDR with legal/financial risk tags.',
-                      isStreaming: false,
-                    }
-                  : m
-              )
-            );
+            try {
+              const dealObj = useDealStore.getState().selectedDeal;
+              const pyJobId = dealObj?.job?.pythonJobId || dealObj?.latestPythonJobId || null;
+              const restRes = await askCopilotRest(dealId, {
+                question: query,
+                job_id: pyJobId,
+              });
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === messageId
+                    ? {
+                        ...m,
+                        content: restRes.answer || m.content,
+                        citations: restRes.citations || m.citations,
+                        isStreaming: false,
+                      }
+                    : m
+                )
+              );
+            } catch {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === messageId
+                    ? {
+                        ...m,
+                        content:
+                          m.content ||
+                          'Unable to reach Pocket Copilot backend. Ensure gateway and AI engine are running.',
+                        isStreaming: false,
+                      }
+                    : m
+                )
+              );
+            }
           } else {
             await new Promise((r) => setTimeout(r, 1200 * retries));
           }

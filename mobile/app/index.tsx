@@ -5,6 +5,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { Shield, Fingerprint, Lock } from 'lucide-react-native';
 import { getEncryptedDb } from '../src/db/client';
+import { loadSavedApiBaseUrl } from '../src/services/api';
 import { useAuthStore } from '../src/stores/useAuthStore';
 
 export default function BiometricLockScreen() {
@@ -19,6 +20,7 @@ export default function BiometricLockScreen() {
   const checkEnrollmentAndPrompt = async () => {
     setErrorMsg(null);
     try {
+      await loadSavedApiBaseUrl();
       const refreshToken = await SecureStore.getItemAsync('acquisense_refresh_token');
       if (!refreshToken) {
         router.replace('/(auth)/login');

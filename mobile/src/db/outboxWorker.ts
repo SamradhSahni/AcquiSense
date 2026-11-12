@@ -7,6 +7,10 @@ export interface OfflineMutationPatch {
   workflowState?: 'open' | 'assigned' | 'remediating' | 'verified' | 'closed';
   assignedTo?: string;
   dueDate?: string;
+  title?: string;
+  description?: string;
+  severity?: 'P0' | 'P1' | 'P2' | 'P3';
+  analystNotes?: string;
   addedConditions?: Array<{ text: string }>;
 }
 
@@ -59,6 +63,9 @@ export function enqueueOrCoalesceMutation(params: {
            workflow_state = COALESCE(?, workflow_state),
            assigned_to = COALESCE(?, assigned_to),
            due_date = COALESCE(?, due_date),
+           title = COALESCE(?, title),
+           description = COALESCE(?, description),
+           severity = COALESCE(?, severity),
            conditions_json = ?,
            audit_log_json = ?,
            is_dirty = 1,
@@ -69,6 +76,9 @@ export function enqueueOrCoalesceMutation(params: {
         params.patch.workflowState ?? null,
         params.patch.assignedTo ?? null,
         params.patch.dueDate ?? null,
+        params.patch.title ?? null,
+        params.patch.description ?? null,
+        params.patch.severity ?? null,
         JSON.stringify(conditions),
         JSON.stringify(auditLog),
         now,
@@ -264,5 +274,61 @@ export async function syncDealDeltaFromServer(dealId: string): Promise<number> {
   });
 
   return syncedCount;
+}
+
+/**
+ * Caches findings fetched via standard /api/findings/deal/:dealId into the encrypted SQLCipher + FTS5 vault.
+ */
+export function upsertFindingsToVault(dealId: string, serverFindings: any[]): number {
+  if (!Array.isArray(serverFindings) || serverFindings.length === 0) return 0;
+  const { sqlite } = getEncryptedDb();
+  let count = 0;
+
+  sqlite.withTransactionSync(() => {
+    for (const f of serverFindings) {
+      count++;
+      sqlite.runSync(
+        `INSERT INTO findings (
+          id, deal_id, domain, severity, title, description, evidence,
+          citations_json, tags_json, workflow_state, review_status,
+          assigned_to, due_date, conditions_json, audit_log_json,
+          server_version, is_dirty, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title = CASE WHEN findings.is_dirty = 0 THEN excluded.title ELSE findings.title END,
+          description = CASE WHEN findings.is_dirty = 0 THEN excluded.description ELSE findings.description END,
+          severity = CASE WHEN findings.is_dirty = 0 THEN excluded.severity ELSE findings.severity END,
+          workflow_state = CASE WHEN findings.is_dirty = 0 THEN excluded.workflow_state ELSE findings.workflow_state END,
+          review_status = CASE WHEN findings.is_dirty = 0 THEN excluded.review_status ELSE findings.review_status END,
+          assigned_to = CASE WHEN findings.is_dirty = 0 THEN excluded.assigned_to ELSE findings.assigned_to END,
+          due_date = CASE WHEN findings.is_dirty = 0 THEN excluded.due_date ELSE findings.due_date END,
+          conditions_json = CASE WHEN findings.is_dirty = 0 THEN excluded.conditions_json ELSE findings.conditions_json END,
+          audit_log_json = CASE WHEN findings.is_dirty = 0 THEN excluded.audit_log_json ELSE findings.audit_log_json END,
+          server_version = CASE WHEN findings.is_dirty = 0 THEN excluded.server_version ELSE findings.server_version END,
+          updated_at = excluded.updated_at`,
+        [
+          f._id || f.id || f.pythonFindingId,
+          f.dealId || dealId,
+          f.domain || 'commercial',
+          f.severity || 'P2',
+          f.title || 'Untitled Finding',
+          f.description || '',
+          f.evidence || '',
+          JSON.stringify(f.citations || []),
+          JSON.stringify(f.tags || []),
+          f.workflowState || 'open',
+          f.reviewStatus || 'ai_generated',
+          f.assignedTo || null,
+          f.dueDate || null,
+          JSON.stringify(f.conditions || []),
+          JSON.stringify(f.auditLog || []),
+          f.__v || 0,
+          f.updatedAt || new Date().toISOString(),
+        ]
+      );
+    }
+  });
+
+  return count;
 }
 

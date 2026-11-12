@@ -68,7 +68,11 @@ router.post('/sync/batch', async (req, res) => {
       if (m.patch.workflowState !== undefined) setFields.workflowState = m.patch.workflowState;
       if (m.patch.assignedTo !== undefined) setFields.assignedTo = m.patch.assignedTo;
       if (m.patch.dueDate !== undefined) setFields.dueDate = m.patch.dueDate;
-      setFields.reviewedBy = req.user?.name || 'Mobile Analyst';
+      if (m.patch.title !== undefined) setFields.title = m.patch.title;
+      if (m.patch.description !== undefined) setFields.description = m.patch.description;
+      if (m.patch.severity !== undefined) setFields.severity = m.patch.severity;
+      if (m.patch.analystNotes !== undefined) setFields.analystNotes = m.patch.analystNotes;
+      setFields.reviewedBy = req.user?.name || req.user?.email || 'Mobile Analyst';
       setFields.reviewedAt = new Date();
 
       const pushFields = {};
@@ -186,7 +190,8 @@ router.get('/deals/:dealId/delta', async (req, res) => {
 /**
  * Multipart VDR Upload Endpoints [FEAT-03]
  */
-const UPLOAD_BASE_DIR = path.join(__dirname, '../../uploads');
+const UPLOAD_BASE_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+const FALLBACK_UPLOAD_DIR = path.join(__dirname, '../../uploads');
 const MULTIPART_TEMP_DIR = path.join(UPLOAD_BASE_DIR, 'multipart_temp');
 if (!fs.existsSync(MULTIPART_TEMP_DIR)) {
   fs.mkdirSync(MULTIPART_TEMP_DIR, { recursive: true });
@@ -308,10 +313,13 @@ router.get('/deals/:dealId/files/:fileId/watermarked-stream', async (req, res) =
 
   let filePath = null;
   if (fileMeta) {
-    filePath = path.join(UPLOAD_BASE_DIR, 'vdr', dealId, fileMeta.savedName);
-    if (!fs.existsSync(filePath)) {
-      filePath = path.join(UPLOAD_BASE_DIR, fileMeta.savedName);
-    }
+    const candidates = [
+      path.join(UPLOAD_BASE_DIR, fileMeta.savedName),
+      path.join(UPLOAD_BASE_DIR, 'vdr', dealId, fileMeta.savedName),
+      path.join(FALLBACK_UPLOAD_DIR, fileMeta.savedName),
+      path.join(FALLBACK_UPLOAD_DIR, 'vdr', dealId, fileMeta.savedName),
+    ];
+    filePath = candidates.find((p) => fs.existsSync(p)) || null;
   }
 
   if (!filePath || !fs.existsSync(filePath)) {

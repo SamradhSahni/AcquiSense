@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Briefcase, Activity, CheckSquare, ShieldCheck } from 'lucide-react-native';
+import { Briefcase, PlusCircle, CheckSquare, FileBarChart2, ShieldCheck } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -27,31 +27,43 @@ export default function TabLayout() {
         name="deals"
         options={{
           title: 'Pipeline',
-          tabBarIcon: ({ color, size }) => <Briefcase size={20} color={color} />,
+          tabBarIcon: ({ color }) => <Briefcase size={20} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="telemetry"
+        name="new-deal"
         options={{
-          title: 'Telemetry',
-          tabBarIcon: ({ color, size }) => <Activity size={20} color={color} />,
+          title: 'New Deal',
+          tabBarIcon: ({ color }) => <PlusCircle size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="action-center"
         options={{
           title: 'Action Center',
-          tabBarIcon: ({ color, size }) => <CheckSquare size={20} color={color} />,
+          tabBarIcon: ({ color }) => <CheckSquare size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color }) => <FileBarChart2 size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Security',
-          tabBarIcon: ({ color, size }) => <ShieldCheck size={20} color={color} />,
+          title: 'Team & Vault',
+          tabBarIcon: ({ color }) => <ShieldCheck size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="telemetry"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
   );
 }
-

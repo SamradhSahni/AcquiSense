@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -7,26 +7,35 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { FileText, Shield, X, ExternalLink } from 'lucide-react-native';
 import { useDealStore } from '../../stores/useDealStore';
-import { API_BASE_URL } from '../../services/api';
+import { downloadAndOpenWatermarkedPdf } from '../../services/webApi';
 
 export const CitationsBottomSheet: React.FC = () => {
   const { isCitationsOpen, activeCitation, selectedDeal, setCitationsOpen } = useDealStore();
+  const [downloading, setDownloading] = useState(false);
 
   if (!isCitationsOpen || !activeCitation) return null;
 
-  const handleOpenWatermarkedPdf = () => {
+  const handleOpenWatermarkedPdf = async () => {
     if (!selectedDeal) return;
-    const url = `${API_BASE_URL}/api/mobile/deals/${selectedDeal.id}/files/${encodeURIComponent(
-      activeCitation.file
-    )}/watermarked-stream`;
-    Alert.alert(
-      'Forensic Watermarked PDF Stream',
-      `Loading stream from:\n${url}\n\nTamper-evident watermark: User ID + Device IP + Timestamp burned into all pages.`,
-      [{ text: 'Dismiss' }]
-    );
+    setDownloading(true);
+    try {
+      await downloadAndOpenWatermarkedPdf(
+        selectedDeal.id,
+        activeCitation.file,
+        activeCitation.file
+      );
+    } catch (err: any) {
+      Alert.alert(
+        'Document Stream Notice',
+        err?.message || 'Unable to stream watermarked document. Verify backend connectivity and file presence in VDR.'
+      );
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -54,7 +63,7 @@ export const CitationsBottomSheet: React.FC = () => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.fileName}>{activeCitation.file}</Text>
                 <Text style={styles.pageInfo}>
-                  {activeCitation.page ? `Page ${activeCitation.page} \u2022 ` : ''}
+                  {activeCitation.page ? `Page ${activeCitation.page} • ` : ''}
                   {activeCitation.section || 'General Section'}
                 </Text>
               </View>
@@ -68,13 +77,23 @@ export const CitationsBottomSheet: React.FC = () => {
             <View style={styles.watermarkNotice}>
               <Shield size={14} color="#10B981" style={{ marginRight: 6 }} />
               <Text style={styles.watermarkNoticeText}>
-                Zero-Trust Watermark: Viewers are tagged with user identity and IP hash for audit compliance.
+                Zero-Trust Watermark: Server burns analyst email, IP address, and UTC timestamp diagonally across every page before streaming.
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.viewPdfButton} onPress={handleOpenWatermarkedPdf}>
-              <ExternalLink size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.viewPdfButtonText}>Stream Watermarked Source Document</Text>
+            <TouchableOpacity
+              style={[styles.viewPdfButton, downloading && { opacity: 0.7 }]}
+              onPress={handleOpenWatermarkedPdf}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <ExternalLink size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.viewPdfButtonText}>Open Watermarked Document</Text>
+                </>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -190,4 +209,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

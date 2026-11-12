@@ -3,11 +3,47 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../stores/useAuthStore';
 import { executeEmergencyMnpiWipe } from '../db/client';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL || 'http://10.0.2.2:4000';
+const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL || 'http://10.0.2.2:4100';
+const API_URL_STORAGE_KEY = 'acquisense_custom_api_url';
+
+export let API_BASE_URL = DEFAULT_API_URL;
+
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+export async function loadSavedApiBaseUrl(): Promise<string> {
+  try {
+    const saved = await SecureStore.getItemAsync(API_URL_STORAGE_KEY);
+    if (saved && saved.startsWith('http')) {
+      API_BASE_URL = saved;
+      apiClient.defaults.baseURL = saved;
+    }
+  } catch {
+    // ignore background keystore read errors
+  }
+  return API_BASE_URL;
+}
+
+export async function setCustomApiBaseUrl(url: string): Promise<string> {
+  const normalized = url.trim().replace(/\/+$/, '');
+  API_BASE_URL = normalized || DEFAULT_API_URL;
+  apiClient.defaults.baseURL = API_BASE_URL;
+  try {
+    if (normalized) {
+      await SecureStore.setItemAsync(API_URL_STORAGE_KEY, normalized);
+    } else {
+      await SecureStore.deleteItemAsync(API_URL_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+  return API_BASE_URL;
+}
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 20000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -60,6 +96,7 @@ export async function forceRefreshTokenWithMutex(): Promise<string> {
 }
 
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  config.baseURL = API_BASE_URL;
   const accessToken = useAuthStore.getState().accessToken;
   const deviceId = await SecureStore.getItemAsync('acquisense_device_id');
   if (config.headers) {
@@ -91,4 +128,3 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
