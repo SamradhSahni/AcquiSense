@@ -106,10 +106,20 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
   return config;
 });
 
+const AUTH_SKIP_REFRESH_PATHS = [
+  '/api/auth/mobile/login',
+  '/api/auth/mobile/register',
+  '/api/auth/mobile/refresh',
+  '/api/auth/login',
+  '/api/auth/register',
+];
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<{ code?: string }>) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const reqUrl = originalRequest?.url || '';
+    const isAuthEndpoint = AUTH_SKIP_REFRESH_PATHS.some((path) => reqUrl.includes(path));
 
     // [FEAT-01]: Immediate Cryptographic Wipe if Admin Revoked Device
     if (error.response?.status === 403 && error.response.data?.code === 'REMOTE_WIPE_REQUIRED') {
@@ -118,7 +128,12 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthEndpoint
+    ) {
       originalRequest._retry = true;
       const newToken = await forceRefreshTokenWithMutex();
       originalRequest.headers.Authorization = `Bearer ${newToken}`;

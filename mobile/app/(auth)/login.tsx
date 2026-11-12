@@ -24,8 +24,8 @@ import { getEncryptedDb } from '../../src/db/client';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@acquisense.io');
-  const [password, setPassword] = useState('AcquiSense2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
   const [showServerConfig, setShowServerConfig] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -64,7 +64,7 @@ export default function LoginScreen() {
       if (errMsg.includes('Network Error') || err?.code === 'ECONNABORTED') {
         Alert.alert(
           'Gateway Unreachable',
-          `Could not reach ${getApiBaseUrl()}.\n\nEnsure Podman is running and "adb reverse tcp:4100 tcp:4100" is active, or continue in Offline Sandbox Mode.`,
+          `Could not reach ${getApiBaseUrl()}.\n\nEnsure your AcquiSense backend is running and "adb reverse tcp:4100 tcp:4100" (or your PC LAN IP) is active, or continue in Offline Sandbox Mode.`,
           [
             { text: 'Retry', style: 'cancel' },
             {
