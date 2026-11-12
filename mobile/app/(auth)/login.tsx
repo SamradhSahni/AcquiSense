@@ -114,7 +114,7 @@ export default function LoginScreen() {
             <Lock size={18} color="#64748B" style={styles.inputIcon} />
             <TextInput
               style={styles.textInput}
-              placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+              placeholder="••••••••"
               placeholderTextColor="#475569"
               secureTextEntry
               value={password}
@@ -245,3 +245,4 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
+

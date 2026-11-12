@@ -8,8 +8,9 @@ import {
   TextInput,
   Dimensions,
   ActivityIndicator,
-  FlatList,
+  Alert,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -150,7 +151,7 @@ export default function DealDossierScreen() {
                       : 'RECOMMENDATION: PROCEED WITH CONDITIONS (CAUTION)'}
                   </Text>
                   <Text style={styles.verdictSub}>
-                    Overall Risk Score: {selectedDeal?.overallRiskScore || 7.4} / 10 \u2022{' '}
+                    Overall Risk Score: {selectedDeal?.overallRiskScore || 7.4} / 10 {'\u2022'}{' '}
                     {findings.length} Flagged Findings
                   </Text>
                 </View>
@@ -261,9 +262,10 @@ export default function DealDossierScreen() {
             {loading ? (
               <ActivityIndicator color="#06B6D4" style={{ marginTop: 20 }} />
             ) : (
-              <FlatList
+              <FlashList
                 data={findings}
                 keyExtractor={(item) => item.id}
+                estimatedItemSize={140}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => (
                   <View style={styles.findingCard}>
@@ -294,7 +296,7 @@ export default function DealDossierScreen() {
                     )}
                   </View>
                 )}
-              </FlatList>
+              />
             )}
           </View>
         );
@@ -334,7 +336,7 @@ export default function DealDossierScreen() {
                   <View style={styles.heatmapStats}>
                     <Text style={styles.heatmapCountText}>{domFindings.length} Total Findings</Text>
                     <Text style={styles.heatmapCountP0}>
-                      {p0Count} P0 Critical \u2022 {p1Count} P1 High
+                      {p0Count} P0 Critical {'\u2022'} {p1Count} P1 High
                     </Text>
                   </View>
                 </View>
@@ -355,7 +357,7 @@ export default function DealDossierScreen() {
               nodes={graphNodes}
               edges={graphEdges}
               onSelectNode={(node) => {
-                alert(`Selected Finding:\n[${node.severity}] ${node.title}`);
+                Alert.alert('Selected Finding', `[${node.severity}] ${node.title}`);
               }}
             />
           </View>
@@ -409,7 +411,7 @@ export default function DealDossierScreen() {
                   <FileText size={18} color="#06B6D4" style={{ marginRight: 10 }} />
                   <View>
                     <Text style={styles.vdrFileName}>{file}</Text>
-                    <Text style={styles.vdrFileSize}>2.4 MB \u2022 Forensic Watermark Protected</Text>
+                    <Text style={styles.vdrFileSize}>2.4 MB {'\u2022'} Forensic Watermark Protected</Text>
                   </View>
                 </View>
                 <TouchableOpacity
@@ -884,3 +886,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

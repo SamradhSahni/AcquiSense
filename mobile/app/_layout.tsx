@@ -1,4 +1,5 @@
 import React from 'react';
+import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -51,3 +52,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#07090E',
   },
 });
+

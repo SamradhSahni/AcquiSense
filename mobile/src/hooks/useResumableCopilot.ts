@@ -202,3 +202,4 @@ export function useResumableCopilot(dealId: string) {
 
   return { messages, isRecording, sendMessage, startVoiceRecording, stopVoiceAndSend };
 }
+

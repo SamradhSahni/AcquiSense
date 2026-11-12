@@ -110,7 +110,7 @@ export default function BiometricLockScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.versionLabel}>AcquiSense Mobile v3.0 \u2022 Zero-Trust Hardened</Text>
+      <Text style={styles.versionLabel}>AcquiSense Mobile v3.0 {'\u2022'} Zero-Trust Hardened</Text>
     </View>
   );
 }
@@ -206,3 +206,4 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 });
+

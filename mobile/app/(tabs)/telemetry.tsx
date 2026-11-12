@@ -117,7 +117,7 @@ export default function TelemetryScreen() {
               <Text style={styles.pipelineStatusValue}>{pipelineState}</Text>
             </View>
             <Text style={styles.pipelineDetails}>
-              7-Gate Quality Gates Passed \u2022 SHA-256 Tamper Proof
+              7-Gate Quality Gates Passed {'\u2022'} SHA-256 Tamper Proof
             </Text>
           </View>
           <View style={styles.findingsCounterBox}>
@@ -350,3 +350,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

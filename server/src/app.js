@@ -59,6 +59,7 @@ const activeConnections = new promClient.Gauge({
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
+app.use('/api/v1/mobile/copilot', require('./routes/mobileCopilotProxy'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));

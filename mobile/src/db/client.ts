@@ -189,3 +189,4 @@ export async function executeEmergencyMnpiWipe(): Promise<void> {
   await purgeAllHardwareKeys();
   await setBackgroundWipeFlag(false);
 }
+

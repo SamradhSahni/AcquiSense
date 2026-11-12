@@ -297,3 +297,4 @@ async def transcribe_mobile_voice_query(
         return {
             "transcript": "Summarize the primary P0 risk findings and their impact on purchase price adjustments."
         }
+

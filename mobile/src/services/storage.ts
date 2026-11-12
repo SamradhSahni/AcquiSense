@@ -86,3 +86,4 @@ export async function purgeAllHardwareKeys(): Promise<void> {
   await SecureStore.deleteItemAsync('acquisense_refresh_token');
   await SecureStore.deleteItemAsync('acquisense_device_id');
 }
+

@@ -301,7 +301,7 @@ export default function DealPipelineScreen() {
                     <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={styles.dealName}>{item.name}</Text>
                       <Text style={styles.companySub}>
-                        {item.targetCompany || 'Target Entity'} \u2192 {item.acquirer || 'Acquirer'}
+                        {item.targetCompany || 'Target Entity'} {'\u2192'} {item.acquirer || 'Acquirer'}
                       </Text>
                     </View>
                     <ArrowUpRight size={20} color="#94A3B8" />
@@ -498,3 +498,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+

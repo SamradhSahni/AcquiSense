@@ -219,7 +219,7 @@ export default function ActionCenterScreen() {
                   </Text>
                   {item.conditions.map((c, i) => (
                     <Text key={i} style={styles.conditionItem} numberOfLines={1}>
-                      \u2022 {c.text}
+                      {'\u2022'} {c.text}
                     </Text>
                   ))}
                 </View>
@@ -537,3 +537,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

@@ -76,17 +76,18 @@ export function enqueueOrCoalesceMutation(params: {
       ]
     );
 
-    // 2. Check if a PENDING outbox item already exists for this findingId [FEAT-05]
+    // 2. Check if an outbox item already exists for this findingId [FEAT-05]
     const existingOutbox = sqlite.getFirstSync<{
       idempotency_key: string;
       base_version: number;
       patch_json: string;
       audit_entries_json: string;
-    }>(`SELECT * FROM sync_outbox WHERE finding_id = ? AND status = 'PENDING'`, [
+      status: string;
+    }>(`SELECT * FROM sync_outbox WHERE finding_id = ?`, [
       params.findingId,
     ]);
 
-    if (existingOutbox) {
+    if (existingOutbox && existingOutbox.status === 'PENDING') {
       // Coalesce new patch into existing pending mutation, keeping original base_version
       const prevPatch: OfflineMutationPatch = JSON.parse(existingOutbox.patch_json);
       const mergedPatch: OfflineMutationPatch = {
@@ -109,6 +110,23 @@ export function enqueueOrCoalesceMutation(params: {
           JSON.stringify(prevAudits),
           now,
           existingOutbox.idempotency_key,
+        ]
+      );
+    } else if (existingOutbox) {
+      // Replace prior CONFLICT/REJECTED outbox entry safely without violating UNIQUE(finding_id)
+      const idempotencyKey = Crypto.randomUUID();
+      sqlite.runSync(
+        `UPDATE sync_outbox
+         SET idempotency_key = ?, base_version = ?, patch_json = ?, audit_entries_json = ?,
+             retry_count = 0, status = 'PENDING', conflict_server_json = NULL, updated_at = ?
+         WHERE finding_id = ?`,
+        [
+          idempotencyKey,
+          finding.server_version,
+          JSON.stringify(params.patch),
+          JSON.stringify([newAuditEntry]),
+          now,
+          params.findingId,
         ]
       );
     } else {
@@ -178,6 +196,11 @@ export async function flushOutboxQueue(): Promise<{ applied: number; conflicts: 
           `UPDATE sync_outbox SET status = 'CONFLICT', conflict_server_json = ? WHERE idempotency_key = ?`,
           [JSON.stringify(res.serverRecord), res.idempotencyKey]
         );
+      } else if (res.status === 'REJECTED' || res.status === 'NOT_FOUND') {
+        sqlite.runSync(
+          `UPDATE sync_outbox SET status = ? WHERE idempotency_key = ?`,
+          [res.status, res.idempotencyKey]
+        );
       }
     }
   });
@@ -242,3 +265,4 @@ export async function syncDealDeltaFromServer(dealId: string): Promise<number> {
 
   return syncedCount;
 }
+

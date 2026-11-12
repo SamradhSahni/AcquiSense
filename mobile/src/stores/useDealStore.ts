@@ -49,3 +49,4 @@ export const useDealStore = create<DealState>((set) => ({
     set({ isCitationsOpen, activeCitation: activeCitation ?? null }),
   setPendingSyncCount: (pendingSyncCount) => set({ pendingSyncCount }),
 }));
+

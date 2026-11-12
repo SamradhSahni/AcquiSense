@@ -60,3 +60,4 @@ const MobileDeviceSchema = new mongoose.Schema({
 MobileDeviceSchema.index({ tenantId: 1, userId: 1 });
 
 module.exports = mongoose.model('MobileDevice', MobileDeviceSchema);
+

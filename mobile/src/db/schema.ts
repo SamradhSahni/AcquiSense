@@ -50,3 +50,4 @@ export const syncOutbox = sqliteTable('sync_outbox', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
